@@ -1,10 +1,174 @@
 /**
  * ==========================================================================
  * LÓGICA DE NEGOCIO - REGISTRO DE ALUMNOS (CBTis)
- * Características: LocalStorage persistent, exportación CSV UTF-8 BOM,
- * notificaciones Toast custom, modals premium y búsqueda interactiva.
+ * Almacenamiento: Base de Datos independiente por Grupo en IndexedDB.
+ * Notificaciones Toast custom, modals premium y búsqueda interactiva.
  * ==========================================================================
  */
+
+// --- GESTOR DE BASES DE DATOS INDEPENDIENTES POR GRUPO (IndexedDB) ---
+const GroupDBManager = {
+    DB_PREFIX: 'CBTis_DB_Grupo_',
+    STORE_NAME: 'alumnos',
+    KNOWN_GROUPS_KEY: 'cbtis_known_group_databases',
+
+    // Sanitizar el nombre del grupo para crear la DB física
+    sanitizeGroupName(groupName) {
+        if (!groupName) return '';
+        return groupName.trim().toUpperCase().replace(/[\/\\?%*:|"<>.]/g, '').replace(/\s+/g, '_');
+    },
+
+    // Obtener el nombre de la DB física
+    getDbName(groupName) {
+        const safe = this.sanitizeGroupName(groupName);
+        return `${this.DB_PREFIX}${safe}`;
+    },
+
+    // Obtener la lista de grupos conocidos con base de datos
+    getKnownGroups() {
+        try {
+            const raw = localStorage.getItem(this.KNOWN_GROUPS_KEY);
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            console.error('Error al obtener lista de grupos:', e);
+            return [];
+        }
+    },
+
+    // Registrar un grupo en el catálogo de grupos
+    registerGroup(groupName) {
+        const trimmed = groupName.trim().toUpperCase();
+        if (!trimmed) return;
+        const groups = this.getKnownGroups();
+        if (!groups.includes(trimmed)) {
+            groups.push(trimmed);
+            groups.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+            localStorage.setItem(this.KNOWN_GROUPS_KEY, JSON.stringify(groups));
+        }
+    },
+
+    // Abrir o crear la base de datos independiente para un grupo determinado
+    openGroupDB(groupName) {
+        return new Promise((resolve, reject) => {
+            const safeName = this.sanitizeGroupName(groupName);
+            if (!safeName) {
+                return reject(new Error('Nombre de grupo inválido.'));
+            }
+
+            const dbName = this.getDbName(groupName);
+            const request = indexedDB.open(dbName, 1);
+
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+                    const store = db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
+                    store.createIndex('by_paternal', 'paternalLastName', { unique: false });
+                    store.createIndex('by_email', 'email', { unique: false });
+                }
+            };
+
+            request.onsuccess = (e) => {
+                this.registerGroup(groupName);
+                resolve(e.target.result);
+            };
+
+            request.onerror = (e) => {
+                console.error(`Error al abrir IndexedDB para el grupo ${groupName}:`, e.target.error);
+                reject(e.target.error);
+            };
+        });
+    },
+
+    // Cargar todos los alumnos de un grupo desde su DB independiente
+    getStudents(groupName) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const db = await this.openGroupDB(groupName);
+                const tx = db.transaction(this.STORE_NAME, 'readonly');
+                const store = tx.objectStore(this.STORE_NAME);
+                const request = store.getAll();
+
+                request.onsuccess = () => {
+                    db.close();
+                    resolve(request.result || []);
+                };
+                request.onerror = (e) => {
+                    db.close();
+                    reject(e.target.error);
+                };
+            } catch (err) {
+                reject(err);
+            }
+        });
+    },
+
+    // Guardar o actualizar un alumno en la DB del grupo correspondiente
+    saveStudent(groupName, student) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const db = await this.openGroupDB(groupName);
+                const tx = db.transaction(this.STORE_NAME, 'readwrite');
+                const store = tx.objectStore(this.STORE_NAME);
+                const request = store.put(student);
+
+                request.onsuccess = () => {
+                    db.close();
+                    resolve(true);
+                };
+                request.onerror = (e) => {
+                    db.close();
+                    reject(e.target.error);
+                };
+            } catch (err) {
+                reject(err);
+            }
+        });
+    },
+
+    // Eliminar un alumno de la DB del grupo
+    deleteStudent(groupName, studentId) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const db = await this.openGroupDB(groupName);
+                const tx = db.transaction(this.STORE_NAME, 'readwrite');
+                const store = tx.objectStore(this.STORE_NAME);
+                const request = store.delete(studentId);
+
+                request.onsuccess = () => {
+                    db.close();
+                    resolve(true);
+                };
+                request.onerror = (e) => {
+                    db.close();
+                    reject(e.target.error);
+                };
+            } catch (err) {
+                reject(err);
+            }
+        });
+    },
+
+    // Eliminar completamente la base de datos física de un grupo
+    deleteGroupDB(groupName) {
+        return new Promise((resolve, reject) => {
+            const dbName = this.getDbName(groupName);
+            const req = indexedDB.deleteDatabase(dbName);
+
+            req.onsuccess = () => {
+                const trimmed = groupName.trim().toUpperCase();
+                let groups = this.getKnownGroups();
+                groups = groups.filter(g => g !== trimmed);
+                localStorage.setItem(this.KNOWN_GROUPS_KEY, JSON.stringify(groups));
+                resolve(true);
+            };
+
+            req.onerror = (e) => {
+                console.error(`Error al eliminar la BD del grupo ${groupName}:`, e.target.error);
+                reject(e.target.error);
+            };
+        });
+    }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- ESTADO DE LA APLICACIÓN ---
@@ -28,12 +192,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const emailInput = document.getElementById('email-input');
     const submitBtn = document.getElementById('btn-submit');
 
-    // Tabla y Buscador
+    // Tabla y Gestor de Base de Datos de Grupo
     const studentsTable = document.getElementById('students-table');
     const studentsTableBody = document.getElementById('students-table-body');
     const searchInput = document.getElementById('search-input');
     const clearSearchBtn = document.getElementById('clear-search');
-    const exportCsvBtn = document.getElementById('btn-export-csv');
+    const groupDbSelect = document.getElementById('group-db-select');
+    const btnDownloadList = document.getElementById('btn-download-list');
 
     // Vistas Vacías
     const emptyStateView = document.getElementById('empty-state-view');
@@ -50,8 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const attDateInput = document.getElementById('attendance-date');
     const btnImportFromRegistry = document.getElementById('btn-import-from-registry');
-    const csvFileInput = document.getElementById('csv-file-input');
-    const btnUploadCsvTrigger = document.getElementById('btn-upload-csv-trigger');
+    const attGroupDbSelect = document.getElementById('att-group-db-select');
     const btnExportHistory = document.getElementById('btn-export-history');
     const btnImportHistoryTrigger = document.getElementById('btn-import-history-trigger');
     const importHistoryFile = document.getElementById('import-history-file');
@@ -104,24 +268,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- INICIALIZACIÓN ---
-    function init() {
-        // Cargar datos desde LocalStorage
-        const savedStudents = localStorage.getItem('cbtis_students');
-        if (savedStudents) {
-            try {
-                students = JSON.parse(savedStudents);
-                sortStudents();
-            } catch (e) {
-                console.error("Error al cargar alumnos desde localStorage:", e);
-                students = [];
-            }
-        }
+    async function init() {
+        refreshGroupSelects();
 
         const savedGroup = localStorage.getItem('cbtis_active_group');
         if (savedGroup) {
             groupInput.value = savedGroup;
+            await loadGroupFromDB(savedGroup);
         } else {
-            groupInput.value = '';
+            const knownGroups = GroupDBManager.getKnownGroups();
+            if (knownGroups.length > 0) {
+                groupInput.value = knownGroups[0];
+                await loadGroupFromDB(knownGroups[0]);
+            } else {
+                students = [];
+                render();
+            }
         }
 
         // Cargar asistencia desde LocalStorage
@@ -155,28 +317,80 @@ document.addEventListener('DOMContentLoaded', () => {
             attDateInput.value = todayStr;
         }
 
-        // Establecer fecha actual formateada en español
         setCurrentDate();
-
-        // Configurar Event Listeners
         setupEventListeners();
 
-        // Renderizar tablas por primera vez
         render();
         renderAttendance();
 
+        const currentActiveGroup = groupInput.value.trim();
         showToast(
             '¡Bienvenido!', 
-            `Sistema iniciado. ${students.length} alumnos registrados.`, 
+            currentActiveGroup 
+                ? `Base de datos cargada (${currentActiveGroup}). ${students.length} alumnos.`
+                : 'Sistema listo para registrar y gestionar bases de datos por grupo.', 
             'info'
         );
+    }
+
+    // --- MANEJO DE SELECCIÓN Y CARGA DE BD POR GRUPO ---
+    async function loadGroupFromDB(groupName) {
+        const trimmed = groupName.trim().toUpperCase();
+        if (!trimmed) {
+            students = [];
+            render();
+            return;
+        }
+
+        try {
+            const loaded = await GroupDBManager.getStudents(trimmed);
+            students = loaded || [];
+            sortStudents();
+            
+            localStorage.setItem('cbtis_active_group', trimmed);
+            if (groupInput.value !== trimmed) {
+                groupInput.value = trimmed;
+            }
+            if (groupDbSelect) {
+                groupDbSelect.value = trimmed;
+            }
+            render();
+        } catch (err) {
+            console.error(`Error al cargar la base de datos del grupo ${trimmed}:`, err);
+            showToast('Error de Base de Datos', `No se pudo abrir la BD del grupo ${trimmed}.`, 'danger');
+        }
+    }
+
+    function refreshGroupSelects() {
+        const groups = GroupDBManager.getKnownGroups();
+        const currentActive = groupInput ? groupInput.value.trim().toUpperCase() : '';
+
+        if (groupDbSelect) {
+            groupDbSelect.innerHTML = '<option value="">-- Cargar Base de Datos de Grupo --</option>';
+            groups.forEach(grp => {
+                const opt = document.createElement('option');
+                opt.value = grp;
+                opt.textContent = `Grupo ${grp}`;
+                if (grp === currentActive) opt.selected = true;
+                groupDbSelect.appendChild(opt);
+            });
+        }
+
+        if (attGroupDbSelect) {
+            attGroupDbSelect.innerHTML = '<option value="">-- Cargar de otra BD de Grupo --</option>';
+            groups.forEach(grp => {
+                const opt = document.createElement('option');
+                opt.value = grp;
+                opt.textContent = `Grupo ${grp}`;
+                attGroupDbSelect.appendChild(opt);
+            });
+        }
     }
 
     // --- MANEJO DE FECHA ---
     function setCurrentDate() {
         const today = new Date();
         const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
-        // Formato DD/MM/AAAA
         currentDateSpan.textContent = today.toLocaleDateString('es-MX', options);
     }
 
@@ -194,21 +408,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
         groupInput.addEventListener('input', () => {
             validateField(groupInput);
-            localStorage.setItem('cbtis_active_group', groupInput.value);
         });
-        groupInput.addEventListener('blur', () => {
+
+        groupInput.addEventListener('blur', async () => {
             validateField(groupInput);
             const capitalized = groupInput.value.toUpperCase().trim();
-            groupInput.value = capitalized;
-            localStorage.setItem('cbtis_active_group', capitalized);
+            if (capitalized && capitalized !== localStorage.getItem('cbtis_active_group')) {
+                groupInput.value = capitalized;
+                await loadGroupFromDB(capitalized);
+            }
         });
+
+        // Selector de Base de Datos de Grupo
+        if (groupDbSelect) {
+            groupDbSelect.addEventListener('change', async (e) => {
+                const selectedGroup = e.target.value;
+                if (selectedGroup) {
+                    await loadGroupFromDB(selectedGroup);
+                    showToast('Base de Datos Cargada', `Se cargó el grupo ${selectedGroup} desde IndexedDB.`, 'success');
+                }
+            });
+        }
+
+        // Botón Descargar Lista
+        if (btnDownloadList) {
+            btnDownloadList.addEventListener('click', downloadGroupList);
+        }
 
         // Barra de Búsqueda
         searchInput.addEventListener('input', handleSearch);
         clearSearchBtn.addEventListener('click', handleClearSearch);
-
-        // Exportación CSV
-        exportCsvBtn.addEventListener('click', exportToCSV);
 
         // Control del Modal de Edición
         editModalCloseBtn.addEventListener('click', closeEditModal);
@@ -240,47 +469,114 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // --- EVENT LISTENERS DE ASISTENCIA ---
-        // Pestañas
         setupTabs();
 
-        // Importación/Carga de alumnos
         btnImportFromRegistry.addEventListener('click', importFromRegistry);
-        btnUploadCsvTrigger.addEventListener('click', () => csvFileInput.click());
-        csvFileInput.addEventListener('change', handleCSVUpload);
+        if (attGroupDbSelect) attGroupDbSelect.addEventListener('change', handleAttGroupSelect);
 
-        // Respaldo
         btnExportHistory.addEventListener('click', exportAttendanceHistory);
         btnImportHistoryTrigger.addEventListener('click', () => importHistoryFile.click());
         importHistoryFile.addEventListener('change', handleImportHistory);
 
-        // Búsqueda y fecha
         attSearchInput.addEventListener('input', handleAttendanceSearch);
         attClearSearchBtn.addEventListener('click', handleAttendanceClearSearch);
         attDateInput.addEventListener('change', () => renderAttendance());
     }
 
 
+    // --- DESCARGA DE LISTA DE ALUMNOS ---
+    function downloadGroupList() {
+        if (students.length === 0) {
+            showToast('Descarga Fallida', 'No hay alumnos registrados para descargar.', 'warning');
+            return;
+        }
+
+        const rawGroup = groupInput.value.trim();
+        if (rawGroup === '') {
+            showToast('Grupo Requerido', 'Especifica el grupo en el formulario para nombrar el archivo.', 'warning');
+            validateField(groupInput);
+            groupInput.focus();
+            return;
+        }
+
+        const safeGroup = rawGroup.replace(/[\/\\?%*:|"<>.]/g, '').replace(/\s+/g, '_');
+
+        let csvContent = `Grupo Escolar: ${rawGroup}\nNº,ID Alumno,Apellido Paterno,Apellido Materno,Nombre(s),Correo Electrónico\n`;
+
+        students.forEach((student, index) => {
+            const num = index + 1;
+            const studentId = escapeCSVField(student.id || '');
+            const paternal = escapeCSVField(student.paternalLastName);
+            const maternal = escapeCSVField(student.maternalLastName);
+            const name = escapeCSVField(student.firstName);
+            const email = escapeCSVField(student.email || '');
+
+            csvContent += `${num},${studentId},${paternal},${maternal},${name},${email}\n`;
+        });
+
+        // Marca de orden de bytes UTF-8 (BOM) para compatibilidad con Excel
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            const today = new Date();
+            const dateStr = today.toISOString().split('T')[0];
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', `lista_alumnos_${safeGroup}_${dateStr}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast(
+                'Lista Descargada', 
+                `Se ha descargado la lista del grupo ${rawGroup} con ${students.length} alumnos.`, 
+                'success'
+            );
+        } else {
+            showToast('Error', 'Tu navegador no soporta la descarga directa de archivos.', 'danger');
+        }
+    }
+
+    function escapeCSVField(val) {
+        let stringVal = val ? val.toString() : '';
+        if (stringVal.includes('"')) {
+            stringVal = stringVal.replace(/"/g, '""');
+        }
+        if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
+            stringVal = `"${stringVal}"`;
+        }
+        return stringVal;
+    }
+
+
     // --- VALIDACIONES DE FORMULARIO ---
     function validateField(input) {
+        if (!input) return false;
         const parent = input.parentElement;
         const value = input.value.trim();
-        const errorSpan = parent.querySelector('.error-message');
+        const errorSpan = parent ? parent.querySelector('.error-message') : null;
 
         if (value === '') {
-            parent.classList.remove('success');
-            parent.classList.add('error');
+            if (parent) {
+                parent.classList.remove('success');
+                parent.classList.add('error');
+            }
             if (errorSpan) {
                 errorSpan.textContent = 'Este campo es requerido.';
             }
             return false;
         }
 
-        // Validación específica para correo electrónico
         if (input.type === 'email' || input.id === 'email-input' || input.id === 'edit-email') {
             const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
             if (!emailRegex.test(value)) {
-                parent.classList.remove('success');
-                parent.classList.add('error');
+                if (parent) {
+                    parent.classList.remove('success');
+                    parent.classList.add('error');
+                }
                 if (errorSpan) {
                     errorSpan.textContent = 'Introduce un formato de correo válido.';
                 }
@@ -288,8 +584,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        parent.classList.remove('error');
-        parent.classList.add('success');
+        if (parent) {
+            parent.classList.remove('error');
+            parent.classList.add('success');
+        }
         return true;
     }
 
@@ -305,32 +603,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearFormValidationStyles() {
         [paternalInput, maternalInput, firstNameInput, emailInput].forEach(input => {
-            const parent = input.parentElement;
-            parent.classList.remove('success', 'error');
+            if (input && input.parentElement) {
+                input.parentElement.classList.remove('success', 'error');
+            }
         });
     }
 
 
-    // --- OPERACIONES CRUD ---
+    // --- OPERACIONES CRUD SOBRE INDEXEDDB ---
 
-    // 1. Crear Alumno
-    function handleRegistrationSubmit(e) {
+    // 1. Crear Alumno y Guardar en la BD del Grupo
+    async function handleRegistrationSubmit(e) {
         e.preventDefault();
 
-        // Validar campos
         if (!validateForm()) {
             showToast('Formulario Incompleto', 'Por favor, llena todos los campos obligatorios.', 'warning');
             return;
         }
 
-        // Obtener y formatear datos (Capitalización de nombres)
         const group = groupInput.value.toUpperCase().trim();
         const paternal = capitalizeText(paternalInput.value);
         const maternal = capitalizeText(maternalInput.value);
         const firstName = capitalizeText(firstNameInput.value);
         const email = emailInput.value.trim().toLowerCase();
 
-        // Verificar si ya existe un alumno con el mismo nombre y apellidos
+        // Verificar duplicados en el grupo activo
         const isDuplicate = students.some(student => 
             student.firstName.toLowerCase().trim() === firstName.toLowerCase().trim() &&
             student.paternalLastName.toLowerCase().trim() === paternal.toLowerCase().trim() &&
@@ -340,16 +637,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isDuplicate) {
             showToast(
                 'Registro Duplicado', 
-                `El alumno "${firstName} ${paternal} ${maternal}" ya se encuentra registrado.`, 
+                `El alumno "${firstName} ${paternal} ${maternal}" ya se encuentra registrado en el grupo ${group}.`, 
                 'warning'
             );
             return;
         }
 
-        // Generar ID único oculto para el registro (ej. ALU-2026-LX8K2M)
         const uniqueId = `ALU-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`;
 
-        // Crear objeto de alumno
         const newStudent = {
             id: uniqueId,
             group: group,
@@ -359,41 +654,37 @@ document.addEventListener('DOMContentLoaded', () => {
             email: email
         };
 
-        // Agregar al estado e indexar
-        students.push(newStudent);
-        sortStudents();
-        saveToLocalStorage();
+        try {
+            await GroupDBManager.saveStudent(group, newStudent);
 
-        // Renderizar con animación especial para la nueva fila
-        render(newStudent.id);
+            students.push(newStudent);
+            sortStudents();
+            refreshGroupSelects();
+            render(newStudent.id);
 
-        // Limpiar solo los campos de alumno, no el grupo
-        paternalInput.value = '';
-        maternalInput.value = '';
-        firstNameInput.value = '';
-        emailInput.value = '';
-        clearFormValidationStyles();
+            // Limpiar datos del alumno
+            paternalInput.value = '';
+            maternalInput.value = '';
+            firstNameInput.value = '';
+            emailInput.value = '';
+            clearFormValidationStyles();
 
-        // Notificación de Éxito
-        showToast(
-            'Alumno Registrado', 
-            `${firstName} ${paternal} ha sido agregado correctamente.`, 
-            'success'
-        );
+            showToast(
+                'Guardado en Base de Datos', 
+                `${firstName} ${paternal} ha sido guardado en la BD del grupo ${group}.`, 
+                'success'
+            );
 
-        // Generar y mostrar el Código QR del nuevo alumno
-        showQRCodeModal(newStudent);
-    }
-
-    // Guardar cambios persistentes
-    function saveToLocalStorage() {
-        localStorage.setItem('cbtis_students', JSON.stringify(students));
+            showQRCodeModal(newStudent);
+        } catch (err) {
+            console.error("Error al guardar alumno en IndexedDB:", err);
+            showToast('Error al Guardar', 'No se pudo guardar el registro en la base de datos del grupo.', 'danger');
+        }
     }
 
 
     // --- SISTEMA DE RENDERIZADO Y VISTAS ---
     function render(highlightId = null) {
-        // 1. Filtrar los alumnos según la barra de búsqueda
         const filteredStudents = students.filter(student => {
             const query = currentFilter.toLowerCase().trim();
             if (query === '') return true;
@@ -405,35 +696,29 @@ document.addEventListener('DOMContentLoaded', () => {
             return fullName.includes(query) || alternateFullName.includes(query) || email.includes(query);
         });
 
-        // 2. Controlar la visibilidad de los estados vacíos
         if (students.length === 0) {
-            // No hay alumnos registrados en absoluto
             emptyStateView.style.display = 'flex';
             noResultsView.style.display = 'none';
             studentsTable.style.display = 'none';
-            exportCsvBtn.disabled = true;
+            if (btnDownloadList) btnDownloadList.disabled = true;
         } else if (filteredStudents.length === 0) {
-            // Hay alumnos pero ninguno coincide con la búsqueda
             emptyStateView.style.display = 'none';
             noResultsView.style.display = 'flex';
             studentsTable.style.display = 'none';
-            exportCsvBtn.disabled = true;
+            if (btnDownloadList) btnDownloadList.disabled = true;
         } else {
-            // Hay alumnos que coinciden con los filtros
             emptyStateView.style.display = 'none';
             noResultsView.style.display = 'none';
             studentsTable.style.display = 'table';
-            exportCsvBtn.disabled = false;
+            if (btnDownloadList) btnDownloadList.disabled = false;
         }
 
-        // 3. Renderizar filas de la tabla
         studentsTableBody.innerHTML = '';
         
         filteredStudents.forEach((student, index) => {
             const row = document.createElement('tr');
             row.id = `row-${student.id}`;
 
-            // Si es un nuevo alumno recién agregado, añadir clase de animación
             if (highlightId && student.id === highlightId) {
                 row.classList.add('row-new');
             }
@@ -477,7 +762,6 @@ document.addEventListener('DOMContentLoaded', () => {
             studentsTableBody.appendChild(row);
         });
 
-        // Registrar dinámicamente eventos para botones de acciones en la tabla
         document.querySelectorAll('.btn-qr-row').forEach(btn => {
             btn.addEventListener('click', () => {
                 const studentId = btn.getAttribute('data-id');
@@ -496,7 +780,6 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.addEventListener('click', () => openDeleteModal(btn.getAttribute('data-id')));
         });
 
-        // 4. Actualizar contadores
         totalCountSpan.textContent = students.length;
     }
 
@@ -504,14 +787,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- MANEJO DE BÚSQUEDA ---
     function handleSearch(e) {
         currentFilter = e.target.value;
-        
-        // Mostrar u ocultar botón de limpiar búsqueda
         if (currentFilter.length > 0) {
             clearSearchBtn.style.display = 'flex';
         } else {
             clearSearchBtn.style.display = 'none';
         }
-
         render();
     }
 
@@ -531,21 +811,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         studentToEditId = id;
 
-        // Construir contenido dinámico del formulario de edición dentro del modal
         editModalBody.innerHTML = `
             <div class="form-modal-edit" style="display: flex; flex-direction: column; gap: 1.2rem;">
                 <div class="input-group">
-                    <label for="edit-paternal-name">
+                    <label for="edit-paternal">
                         <i class="fa-solid fa-signature input-icon"></i> Apellido Paterno
                     </label>
-                    <input type="text" id="edit-paternal-name" value="${escapeHTML(student.paternalLastName)}" required>
+                    <input type="text" id="edit-paternal" value="${escapeHTML(student.paternalLastName)}" required>
                     <span class="error-message">Este campo es requerido.</span>
                 </div>
                 <div class="input-group">
-                    <label for="edit-maternal-name">
+                    <label for="edit-maternal">
                         <i class="fa-solid fa-signature input-icon"></i> Apellido Materno
                     </label>
-                    <input type="text" id="edit-maternal-name" value="${escapeHTML(student.maternalLastName)}" required>
+                    <input type="text" id="edit-maternal" value="${escapeHTML(student.maternalLastName)}" required>
                     <span class="error-message">Este campo es requerido.</span>
                 </div>
                 <div class="input-group">
@@ -565,20 +844,18 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
 
-        // Añadir escuchas de validación a campos de edición
-        const editPaternal = document.getElementById('edit-paternal-name');
-        const editMaternal = document.getElementById('edit-maternal-name');
+        const editPaternal = document.getElementById('edit-paternal');
+        const editMaternal = document.getElementById('edit-maternal');
         const editFirstName = document.getElementById('edit-first-name');
         const editEmail = document.getElementById('edit-email');
 
         [editPaternal, editMaternal, editFirstName, editEmail].forEach(input => {
-            input.addEventListener('input', () => validateField(input));
+            if (input) input.addEventListener('input', () => validateField(input));
         });
 
-        // Mostrar modal agregando clase active
         editModal.classList.add('active');
         editModal.setAttribute('aria-hidden', 'false');
-        editPaternal.focus();
+        if (editPaternal) editPaternal.focus();
     }
 
     function closeEditModal() {
@@ -587,15 +864,14 @@ document.addEventListener('DOMContentLoaded', () => {
         studentToEditId = null;
     }
 
-    function saveStudentEdit() {
+    async function saveStudentEdit() {
         if (!studentToEditId) return;
 
-        const editPaternal = document.getElementById('edit-paternal-name');
-        const editMaternal = document.getElementById('edit-maternal-name');
+        const editPaternal = document.getElementById('edit-paternal');
+        const editMaternal = document.getElementById('edit-maternal');
         const editFirstName = document.getElementById('edit-first-name');
         const editEmail = document.getElementById('edit-email');
 
-        // Validar campos en el modal
         const isPaternalValid = validateField(editPaternal);
         const isMaternalValid = validateField(editMaternal);
         const isNameValid = validateField(editFirstName);
@@ -606,15 +882,14 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Encontrar e indexar estudiante
         const index = students.findIndex(s => s.id === studentToEditId);
         if (index !== -1) {
             const formattedPaternal = capitalizeText(editPaternal.value);
             const formattedMaternal = capitalizeText(editMaternal.value);
             const formattedName = capitalizeText(editFirstName.value);
             const formattedEmail = editEmail.value.trim().toLowerCase();
+            const currentGroup = groupInput.value.toUpperCase().trim();
 
-            // Verificar si el nuevo nombre es un duplicado de otro alumno
             const isDuplicate = students.some(student => 
                 student.id !== studentToEditId &&
                 student.firstName.toLowerCase().trim() === formattedName.toLowerCase().trim() &&
@@ -631,7 +906,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            students[index] = {
+            const updatedStudent = {
                 ...students[index],
                 paternalLastName: formattedPaternal,
                 maternalLastName: formattedMaternal,
@@ -639,21 +914,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 email: formattedEmail
             };
 
-            sortStudents();
-            saveToLocalStorage();
-            render();
-            closeEditModal();
+            try {
+                await GroupDBManager.saveStudent(currentGroup, updatedStudent);
+                students[index] = updatedStudent;
+                sortStudents();
+                render();
+                closeEditModal();
 
-            showToast(
-                'Datos Actualizados', 
-                `Se guardaron los cambios para ${formattedName} ${formattedPaternal}.`, 
-                'success'
-            );
+                showToast(
+                    'Base de Datos Actualizada', 
+                    `Se guardaron los cambios para ${formattedName} ${formattedPaternal} en la BD de ${currentGroup}.`, 
+                    'success'
+                );
+            } catch (err) {
+                console.error("Error al actualizar alumno en IndexedDB:", err);
+                showToast('Error', 'No se pudieron guardar los cambios en la base de datos.', 'danger');
+            }
         }
     }
 
 
-    // --- MODAL DE ELIMINACIÓN ---
+    // --- MODAL DE ELIMINACIÓN DE ALUMNO ---
     function openDeleteModal(id) {
         const student = students.find(s => s.id === id);
         if (!student) return;
@@ -677,16 +958,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const targetId = studentToDeleteId;
         const student = students.find(s => s.id === targetId);
         const studentName = student ? `${student.firstName} ${student.paternalLastName}` : 'El alumno';
-        
         const row = document.getElementById(`row-${targetId}`);
         
-        // Cerrar modal inmediatamente
         closeDeleteModal();
 
-        // Si la fila está en el render actual, ejecutar animación de salida antes de remover del DOM
         if (row) {
             row.classList.add('row-delete');
-            // Esperar a que acabe la animación (300ms)
             setTimeout(() => {
                 executeDeletion(targetId, studentName);
             }, 300);
@@ -695,22 +972,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function executeDeletion(id, name) {
-        students = students.filter(s => s.id !== id);
-        saveToLocalStorage();
-        render();
+    async function executeDeletion(id, name) {
+        const currentGroup = groupInput.value.toUpperCase().trim();
+        try {
+            await GroupDBManager.deleteStudent(currentGroup, id);
+            students = students.filter(s => s.id !== id);
+            render();
 
-        showToast(
-            'Registro Eliminado', 
-            `${name} ha sido removido del sistema.`, 
-            'danger'
-        );
+            showToast(
+                'Alumno Eliminado', 
+                `${name} ha sido eliminado de la base de datos del grupo ${currentGroup}.`, 
+                'danger'
+            );
+        } catch (err) {
+            console.error("Error al eliminar alumno de IndexedDB:", err);
+            showToast('Error', 'No se pudo eliminar el alumno de la base de datos.', 'danger');
+        }
     }
 
-    // --- MODAL DE LIMPIEZA DE TABLA ---
+    // --- MODAL DE LIMPIEZA DE VISTA ---
     function openClearModal() {
-        if (students.length === 0) {
-            showToast('Tabla ya Vacía', 'No hay registros en pantalla para limpiar.', 'info');
+        if (students.length === 0 && !groupInput.value) {
+            showToast('Vista ya Limpia', 'No hay grupo cargado en pantalla.', 'info');
             return;
         }
         confirmClearModal.classList.add('active');
@@ -724,18 +1007,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function confirmClearTable() {
         closeClearModal();
-        
-        // Animación de salida a todas las filas antes de vaciar
         const rows = document.querySelectorAll('#students-table-body tr');
         if (rows.length > 0) {
-            rows.forEach(row => {
-                row.classList.add('row-delete');
-            });
-            
-            // Esperar que acabe la animación (300ms)
-            setTimeout(() => {
-                executeClearTable();
-            }, 300);
+            rows.forEach(row => row.classList.add('row-delete'));
+            setTimeout(() => executeClearTable(), 300);
         } else {
             executeClearTable();
         }
@@ -743,60 +1018,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function executeClearTable() {
         students = [];
-        saveToLocalStorage();
+        groupInput.value = '';
+        if (groupDbSelect) groupDbSelect.value = '';
+        localStorage.removeItem('cbtis_active_group');
         
-        // Limpiar inputs del formulario y sus validaciones
         registrationForm.reset();
         clearFormValidationStyles();
-        
         render();
-
-        showToast(
-            'Pantalla Limpiada',
-            'Se han borrado los registros de la pantalla. Listo para iniciar un nuevo grupo.',
-            'info'
-        );
+        showToast('Vista Limpiada', 'Puedes ingresar un nuevo grupo o seleccionar uno existente.', 'info');
     }
 
-    // --- MODAL Y GENERACIÓN DE CÓDIGO QR ---
+
+    // --- MODAL DE CÓDIGO QR ---
     function showQRCodeModal(student) {
-        if (!student) return;
+        if (!student || !qrModal || !qrCodeContainer) return;
         currentQRStudent = student;
 
-        const fullName = `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`;
-        if (qrStudentName) qrStudentName.textContent = fullName;
-        if (qrStudentGroup) qrStudentGroup.innerHTML = `<i class="fa-solid fa-users-rectangle"></i> Grupo: <strong>${escapeHTML(student.group)}</strong>`;
-        if (qrStudentEmail) qrStudentEmail.innerHTML = `<i class="fa-solid fa-envelope"></i> Correo: <strong>${escapeHTML(student.email || 'N/A')}</strong>`;
+        qrStudentName.textContent = `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`;
+        qrStudentGroup.innerHTML = `<i class="fa-solid fa-users-rectangle"></i> Grupo: ${escapeHTML(student.group)}`;
+        qrStudentEmail.innerHTML = `<i class="fa-solid fa-envelope"></i> Correo: ${escapeHTML(student.email || '-')}`;
 
-        if (qrCodeContainer) {
-            qrCodeContainer.innerHTML = '';
+        qrCodeContainer.innerHTML = '';
 
-            const qrData = JSON.stringify({
-                escuela: "CBTis 111",
-                id: student.id,
-                nombre: fullName,
-                grupo: student.group,
-                correo: student.email
+        const qrData = JSON.stringify({
+            id: student.id,
+            nombre: `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`,
+            grupo: student.group,
+            email: student.email
+        });
+
+        if (typeof QRCode !== 'undefined') {
+            new QRCode(qrCodeContainer, {
+                text: qrData,
+                width: 180,
+                height: 180,
+                colorDark: "#0f172a",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
             });
-
-            if (typeof QRCode !== 'undefined') {
-                new QRCode(qrCodeContainer, {
-                    text: qrData,
-                    width: 180,
-                    height: 180,
-                    colorDark: "#0F172A",
-                    colorLight: "#FFFFFF",
-                    correctLevel: QRCode.CorrectLevel.H
-                });
-            } else {
-                const img = document.createElement('img');
-                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
-                img.alt = `QR ${student.firstName}`;
-                qrCodeContainer.appendChild(img);
-            }
-        }
-
-        if (qrModal) {
             qrModal.classList.add('active');
             qrModal.setAttribute('aria-hidden', 'false');
         }
@@ -845,79 +1104,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-
-    // --- EXPORTAR A CSV (UTF-8 con BOM para soporte Excel) ---
-    function exportToCSV() {
-        if (students.length === 0) {
-            showToast('Exportación Fallida', 'No hay alumnos registrados para exportar.', 'warning');
-            return;
-        }
-
-        const rawGroup = groupInput.value.trim();
-        if (rawGroup === '') {
-            showToast('Grupo Requerido', 'Por favor, escribe el grupo en el formulario para nombrar el archivo.', 'warning');
-            validateField(groupInput);
-            groupInput.focus();
-            return;
-        }
-
-        const safeGroup = rawGroup
-            .replace(/[\/\\?%*:|"<>.]/g, '')
-            .replace(/\s+/g, '_');
-
-        // Cabecera del archivo CSV con el ID Único del alumno
-        let csvContent = `Grupo Escolar: ${rawGroup}\nNº,ID Alumno,Apellido Paterno,Apellido Materno,Nombre(s),Correo Electrónico\n`;
-
-        // Mapeo y formateo de filas
-        students.forEach((student, index) => {
-            const num = index + 1;
-            
-            // Sanitizar valores (escapar comillas dobles y englobar entre comillas si es necesario)
-            const studentId = escapeCSVField(student.id || '');
-            const paternal = escapeCSVField(student.paternalLastName);
-            const maternal = escapeCSVField(student.maternalLastName);
-            const name = escapeCSVField(student.firstName);
-            const email = escapeCSVField(student.email || '');
-
-            csvContent += `${num},${studentId},${paternal},${maternal},${name},${email}\n`;
-        });
-
-        // Agregar la marca de orden de bytes (BOM) UTF-8 (\uFEFF) para que Excel reconozca la codificación automáticamente
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-        
-        // Crear elemento de descarga oculto
-        const link = document.createElement("a");
-        if (link.download !== undefined) {
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-
-            // Nombre del archivo con formato: alumnos_cbtis_Grupo_AAAA-MM-DD.csv
-            const today = new Date();
-            const dateStr = today.toISOString().split('T')[0];
-            link.setAttribute("download", `alumnos_cbtis_${safeGroup}_${dateStr}.csv`);
-            
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            showToast(
-                'Exportación Exitosa', 
-                `Se ha descargado el archivo CSV con ${students.length} registros.`, 
-                'success'
-            );
-        } else {
-            showToast('Error', 'Tu navegador no soporta la descarga de archivos directa.', 'danger');
-        }
-    }
-
-
     // --- SISTEMA DE TOAST NOTIFICATIONS ---
     function showToast(title, message, type = 'info') {
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
 
-        // Selección de iconos por tipo
         let iconClass = 'fa-solid fa-circle-info';
         if (type === 'success') iconClass = 'fa-solid fa-circle-check';
         if (type === 'danger') iconClass = 'fa-solid fa-triangle-exclamation';
@@ -926,8 +1117,8 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.innerHTML = `
             <i class="${iconClass} toast-icon"></i>
             <div class="toast-content">
-                <h4 class="toast-title">${title}</h4>
-                <p class="toast-message">${message}</p>
+                <h4 class="toast-title">${escapeHTML(title)}</h4>
+                <p class="toast-message">${escapeHTML(message)}</p>
             </div>
             <button class="toast-close" aria-label="Cerrar notificación">
                 <i class="fa-solid fa-xmark"></i>
@@ -935,15 +1126,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="toast-progress"></div>
         `;
 
-        // Evento botón cerrar
         toast.querySelector('.toast-close').addEventListener('click', () => {
             dismissToast(toast);
         });
 
-        // Agregar al contenedor
         toastContainer.appendChild(toast);
 
-        // Auto-eliminar después de 4 segundos
         setTimeout(() => {
             dismissToast(toast);
         }, 4000);
@@ -952,7 +1140,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function dismissToast(toast) {
         if (!toast.parentNode) return;
         toast.style.animation = 'toastOut 0.3s ease forwards';
-        // Esperar a que acabe la animación de salida
         setTimeout(() => {
             if (toast.parentNode) {
                 toastContainer.removeChild(toast);
@@ -961,12 +1148,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // --- AYUDANTES Y UTILIDADES (UTILITIES) ---
+    // --- AYUDANTES Y UTILIDADES ---
 
-    /**
-     * Capitaliza la primera letra de cada palabra de una cadena y limpia espacios innecesarios.
-     * Ejemplo: "  césar   ramón  " -> "César Ramón"
-     */
     function capitalizeText(str) {
         if (!str) return '';
         return str
@@ -974,31 +1157,11 @@ document.addEventListener('DOMContentLoaded', () => {
             .split(/\s+/)
             .map(word => {
                 if (word.length === 0) return '';
-                // Soporta acentos y la letra Ñ adecuadamente al capitalizar
                 return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
             })
             .join(' ');
     }
 
-    /**
-     * Escapa caracteres de campo CSV si contienen comillas, comas o saltos de línea.
-     */
-    function escapeCSVField(val) {
-        let stringVal = val ? val.toString() : '';
-        // Si contiene comillas dobles, duplicarlas para escapar según estándar CSV
-        if (stringVal.includes('"')) {
-            stringVal = stringVal.replace(/"/g, '""');
-        }
-        // Si contiene comas, comillas o saltos de línea, envolver el campo en comillas dobles
-        if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
-            stringVal = `"${stringVal}"`;
-        }
-        return stringVal;
-    }
-
-    /**
-     * Sanitiza entrada HTML para evitar vulnerabilidades XSS
-     */
     function escapeHTML(str) {
         if (!str) return '';
         return str
@@ -1009,11 +1172,6 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/'/g, '&#039;');
     }
 
-    /**
-     * Ordena la lista de alumnos alfabéticamente de la A a la Z.
-     * Criterio: Apellido Paterno -> Apellido Materno -> Nombre(s)
-     * Utiliza la configuración regional en español ('es') para manejar acentos y la letra Ñ correctamente.
-     */
     function sortStudents() {
         students.sort((a, b) => {
             let cmp = a.paternalLastName.localeCompare(b.paternalLastName, 'es', { sensitivity: 'base' });
@@ -1048,123 +1206,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function importFromRegistry() {
         if (students.length === 0) {
-            showToast('Importación Vacía', 'No hay alumnos registrados en el sistema para importar.', 'warning');
+            showToast('Lista Vacía', 'No hay alumnos en el grupo activo para cargar en asistencia.', 'warning');
             return;
         }
 
-        // Mapear y asignar a alumnos de asistencia
         attendanceStudents = students.map(student => ({
             id: student.id,
             name: `${student.paternalLastName} ${student.maternalLastName} ${student.firstName}`,
             email: student.email || ''
         }));
 
-        // Ordenar alfabéticamente
         attendanceStudents.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
 
         saveAttendanceToLocalStorage();
         renderAttendance();
 
-        showToast('Importación Exitosa', `Se han importado ${attendanceStudents.length} alumnos desde el registro.`, 'success');
+        showToast('Alumnos Cargados', `Se cargaron ${attendanceStudents.length} alumnos del grupo actual.`, 'success');
     }
 
-    function handleCSVUpload(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+    async function handleAttGroupSelect(e) {
+        const selectedGroup = e.target.value;
+        if (!selectedGroup) return;
 
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            const text = evt.target.result;
-            const parsed = parseCSV(text);
-            if (parsed.length === 0) {
-                showToast('Error de Carga', 'No se pudieron extraer alumnos del archivo CSV. Asegúrate del formato.', 'danger');
+        try {
+            const groupStudents = await GroupDBManager.getStudents(selectedGroup);
+            if (groupStudents.length === 0) {
+                showToast('Base de Datos Vacía', `El grupo ${selectedGroup} no tiene alumnos registrados.`, 'warning');
                 return;
             }
 
-            attendanceStudents = parsed;
+            attendanceStudents = groupStudents.map(student => ({
+                id: student.id,
+                name: `${student.paternalLastName} ${student.maternalLastName} ${student.firstName}`,
+                email: student.email || ''
+            }));
+
+            attendanceStudents.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+
             saveAttendanceToLocalStorage();
             renderAttendance();
 
-            showToast('Carga de CSV Exitosa', `Se han cargado ${attendanceStudents.length} alumnos desde el archivo CSV.`, 'success');
-            csvFileInput.value = '';
-        };
-        reader.onerror = function() {
-            showToast('Error', 'No se pudo leer el archivo CSV.', 'danger');
-        };
-        reader.readAsText(file, 'UTF-8');
-    }
-
-    function parseCSV(text) {
-        const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-        if (lines.length === 0) return [];
-
-        let parsedStudents = [];
-        let hasHeader = false;
-
-        const firstLine = lines[0].toLowerCase();
-        if (firstLine.includes('nombre') || firstLine.includes('apellido') || firstLine.includes('email') || firstLine.includes('correo') || firstLine.includes('nº')) {
-            hasHeader = true;
+            showToast('BD de Grupo Cargada', `Se cargaron ${attendanceStudents.length} alumnos del grupo ${selectedGroup}.`, 'success');
+            attGroupDbSelect.value = '';
+        } catch (err) {
+            console.error("Error al cargar grupo para asistencia:", err);
+            showToast('Error', `No se pudo abrir la BD del grupo ${selectedGroup}.`, 'danger');
         }
-
-        const startIndex = hasHeader ? 1 : 0;
-
-        for (let i = startIndex; i < lines.length; i++) {
-            const line = lines[i];
-            const columns = splitCSVLine(line);
-
-            if (columns.length === 0) continue;
-
-            let name = '';
-            let email = '';
-
-            if (columns.length === 1) {
-                name = columns[0];
-            } else if (columns.length === 2) {
-                name = columns[0];
-                email = columns[1];
-            } else if (columns.length >= 3) {
-                if (columns.length >= 4) {
-                    if (columns[3].includes('@')) {
-                        name = `${columns[2]} ${columns[0]} ${columns[1]}`;
-                        email = columns[3];
-                    } else {
-                        name = `${columns[0]} ${columns[1]} ${columns[2]}`;
-                    }
-                } else {
-                    name = `${columns[2]} ${columns[0]} ${columns[1]}`;
-                }
-            }
-
-            if (name) {
-                parsedStudents.push({
-                    id: 'att-' + Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9),
-                    name: capitalizeText(name),
-                    email: email.trim().toLowerCase()
-                });
-            }
-        }
-
-        parsedStudents.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-        return parsedStudents;
-    }
-
-    function splitCSVLine(line) {
-        const result = [];
-        let current = '';
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-            const char = line[i];
-            if (char === '"' || char === "'") {
-                inQuotes = !inQuotes;
-            } else if ((char === ',' || char === ';') && !inQuotes) {
-                result.push(current.trim());
-                current = '';
-            } else {
-                current += char;
-            }
-        }
-        result.push(current.trim());
-        return result;
     }
 
     function renderAttendance() {
@@ -1260,7 +1347,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const status = dayRecords[student.id] || 'present';
             if (status === 'present') present++;
             else if (status === 'absent') absent++;
-            else if (status === 'late') present++; // Consider 'late' as present in stats if it exists in old records
+            else if (status === 'late') present++;
         });
 
         attStatTotal.textContent = total;

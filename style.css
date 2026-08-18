@@ -533,6 +533,87 @@ body {
     color: var(--text-primary);
 }
 
+/* --- Controles de Base de Datos de Grupo (IndexedDB) --- */
+.db-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.db-selector-wrapper, .db-att-selector-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.db-selector-wrapper .db-icon {
+    position: absolute;
+    left: 0.9rem;
+    color: var(--accent-red);
+    pointer-events: none;
+    font-size: 0.95rem;
+    z-index: 1;
+}
+
+.db-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 2.4rem 0.75rem 2.5rem;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    outline: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.8rem center;
+    background-size: 1rem;
+    min-width: 220px;
+}
+
+.db-att-selector-wrapper .db-select {
+    padding-left: 1rem;
+}
+
+.db-select:focus, .db-select:hover {
+    border-color: var(--accent-red);
+    box-shadow: 0 0 12px var(--accent-glow);
+    background-color: rgba(0, 0, 0, 0.45);
+}
+
+.db-select option {
+    background: #0f172a;
+    color: #f8fafc;
+    padding: 0.6rem;
+}
+
+.btn-icon-danger {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+    padding: 0.75rem 0.9rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+}
+
+.btn-icon-danger:hover {
+    background: rgba(239, 68, 68, 0.3);
+    border-color: #ef4444;
+    transform: translateY(-1px);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+}
+
 /* --- Tabla de Alumnos --- */
 .table-container {
     width: 100%;

@@ -140,9 +140,17 @@
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
-                    <button id="btn-export-csv" class="btn btn-success" disabled>
-                        <i class="fa-solid fa-file-csv button-icon"></i> Exportar CSV
-                    </button>
+                    <div class="db-controls">
+                        <div class="db-selector-wrapper">
+                            <i class="fa-solid fa-database db-icon"></i>
+                            <select id="group-db-select" class="db-select" aria-label="Seleccionar Base de Datos de Grupo">
+                                <option value="">-- Cargar Base de Datos de Grupo --</option>
+                            </select>
+                        </div>
+                        <button id="btn-download-list" class="btn btn-success" disabled title="Descargar Lista del Grupo Actual">
+                            <i class="fa-solid fa-file-arrow-down button-icon"></i> Descargar Lista
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Table Container -->
@@ -202,19 +210,17 @@
                     <input type="date" id="attendance-date" required>
                 </div>
 
-                <!-- CSV / Student Load Controls -->
+                <!-- Database Student Load Controls -->
                 <div class="form-actions"
                     style="display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.2rem;">
                     <button type="button" class="btn btn-secondary" id="btn-import-from-registry" style="width: 100%;">
-                        <i class="fa-solid fa-users"></i> Importar de Alumnos
+                        <i class="fa-solid fa-users"></i> Cargar del Grupo Actual
                     </button>
 
-                    <div class="csv-upload-wrapper" style="position: relative; width: 100%;">
-                        <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
-                        <button type="button" class="btn btn-secondary" id="btn-upload-csv-trigger"
-                            style="width: 100%;">
-                            <i class="fa-solid fa-file-import"></i> Cargar Alumnos CSV
-                        </button>
+                    <div class="db-att-selector-wrapper" style="position: relative; width: 100%;">
+                        <select id="att-group-db-select" class="db-select" style="width: 100%;">
+                            <option value="">-- Cargar de otra BD de Grupo --</option>
+                        </select>
                     </div>
                 </div>
 
@@ -383,13 +389,11 @@
             </button>
             <div class="modal-header">
                 <i class="fa-solid fa-broom modal-header-icon text-danger"></i>
-                <h3>¿Limpiar Registros?</h3>
+                <h3>¿Limpiar Vista Actual?</h3>
             </div>
             <div class="modal-body">
-                <p>¿Estás seguro de que deseas vaciar los alumnos de la pantalla para iniciar un nuevo grupo?</p>
-                <p style="margin-top: 10px; font-weight: 600; color: var(--text-primary);">Asegúrate de haber exportado
-                    tus datos actuales a un archivo CSV antes de limpiar, ya que esta acción borrará la lista en
-                    pantalla.</p>
+                <p>¿Estás seguro de que deseas desvincular el grupo en pantalla para capturar o seleccionar un nuevo grupo?</p>
+                <p style="margin-top: 10px; font-weight: 600; color: var(--text-primary);">Los datos guardados en la base de datos de cada grupo no se perderán y podrás volver a cargarlos en cualquier momento desde el selector.</p>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="clear-modal-cancel-btn">Cancelar</button>
@@ -397,6 +401,7 @@
             </div>
         </div>
     </div>
+
 
     <!-- Modal de Código QR -->
     <div class="modal-overlay" id="qr-modal" role="dialog" aria-modal="true" aria-hidden="true">
