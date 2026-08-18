@@ -42,3 +42,7 @@ if st.session_state.alumnos:
     st.dataframe(df_alumnos, use_container_width=True)
 else:
     st.info("Aún no hay alumnos registrados.")
+    import streamlit as st
+
+st.title("Sistema de Registro de Alumnos")
+st.write("Cargando aplicación...")
