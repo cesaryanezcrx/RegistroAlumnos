@@ -1112,3 +1112,124 @@ body {
     vertical-align: middle;
 }
 
+/* --- Botón de Acción QR en Tabla --- */
+.btn-qr-row:hover {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border-color: transparent;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+    color: #ffffff;
+}
+
+/* --- Modal y Contenedor de Código QR --- */
+.modal-card-qr {
+    max-width: 440px;
+    text-align: center;
+}
+
+.qr-modal-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2rem;
+    padding: 1rem 0;
+}
+
+.qr-student-info {
+    text-align: center;
+}
+
+.qr-student-info h4 {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.4rem;
+}
+
+.qr-student-meta {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.qr-code-wrapper {
+    background: #ffffff;
+    padding: 1.2rem;
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid var(--accent-red);
+    transition: transform 0.2s ease;
+}
+
+.qr-code-wrapper:hover {
+    transform: scale(1.02);
+}
+
+#qr-code-container img,
+#qr-code-container canvas {
+    display: block;
+    margin: 0 auto;
+}
+
+.qr-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+}
+
+/* --- Reglas de Impresión para Credencial QR --- */
+@media print {
+    body * {
+        visibility: hidden !important;
+    }
+    #qr-modal, #qr-modal * {
+        visibility: visible !important;
+    }
+    #qr-modal {
+        position: fixed !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        background: #ffffff !important;
+        backdrop-filter: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 99999 !important;
+        opacity: 1 !important;
+    }
+    .modal-card-qr {
+        background: #ffffff !important;
+        color: #000000 !important;
+        border: 2px solid #1e293b !important;
+        box-shadow: none !important;
+        transform: none !important;
+        padding: 2rem !important;
+        max-width: 350px !important;
+    }
+    .modal-close, .modal-footer, .qr-hint {
+        display: none !important;
+    }
+    .modal-header h3 {
+        color: #1e293b !important;
+    }
+    .qr-student-info h4 {
+        color: #0F172A !important;
+    }
+    .qr-student-meta {
+        color: #475569 !important;
+    }
+    .qr-code-wrapper {
+        border-color: #0F172A !important;
+        box-shadow: none !important;
+    }
+}
+
+

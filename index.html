@@ -13,6 +13,8 @@
         rel="stylesheet">
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QRCode.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- Custom Style -->
     <link rel="stylesheet" href="style.css">
 </head>
@@ -381,6 +383,32 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="clear-modal-cancel-btn">Cancelar</button>
                 <button class="btn btn-danger" id="clear-modal-confirm-btn">Sí, Limpiar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Código QR -->
+    <div class="modal-overlay" id="qr-modal" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="modal-card modal-card-qr">
+            <button class="modal-close" id="qr-modal-close-btn" aria-label="Cerrar modal">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="modal-header">
+                <i class="fa-solid fa-qrcode modal-header-icon text-accent"></i>
+                <h3>Código QR del Alumno</h3>
+            </div>
+            <div class="modal-body qr-modal-body">
+                <div class="qr-student-info">
+                    <h4 id="qr-student-name">Nombre del Alumno</h4>
+                    <div class="qr-student-meta">
+                        <span id="qr-student-group"><i class="fa-solid fa-users-rectangle"></i> Grupo: -</span>
+                        <span id="qr-student-email"><i class="fa-solid fa-envelope"></i> Correo: -</span>
+                    </div>
+                </div>
+                <div class="qr-code-wrapper">
+                    <div id="qr-code-container"></div>
+                </div>
+                <p class="qr-hint"><i class="fa-solid fa-circle-info"></i> Código QR listo para escaneo y verificación de información.</p>
             </div>
         </div>
     </div>

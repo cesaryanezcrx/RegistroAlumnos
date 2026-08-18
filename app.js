@@ -91,6 +91,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearModalCancelBtn = document.getElementById('clear-modal-cancel-btn');
     const clearModalConfirmBtn = document.getElementById('clear-modal-confirm-btn');
 
+    // Modal de Código QR
+    let currentQRStudent = null;
+    const qrModal = document.getElementById('qr-modal');
+    const qrStudentName = document.getElementById('qr-student-name');
+    const qrStudentGroup = document.getElementById('qr-student-group');
+    const qrStudentEmail = document.getElementById('qr-student-email');
+    const qrCodeContainer = document.getElementById('qr-code-container');
+    const qrModalCloseBtn = document.getElementById('qr-modal-close-btn');
+    const qrModalDownloadBtn = document.getElementById('qr-modal-download-btn');
+    const qrModalPrintBtn = document.getElementById('qr-modal-print-btn');
+
 
     // --- INICIALIZACIÓN ---
     function init() {
@@ -215,11 +226,17 @@ document.addEventListener('DOMContentLoaded', () => {
         clearModalCancelBtn.addEventListener('click', closeClearModal);
         clearModalConfirmBtn.addEventListener('click', confirmClearTable);
 
+        // Control del Modal de QR
+        if (qrModalCloseBtn) qrModalCloseBtn.addEventListener('click', closeQRCodeModal);
+        if (qrModalDownloadBtn) qrModalDownloadBtn.addEventListener('click', downloadQRCode);
+        if (qrModalPrintBtn) qrModalPrintBtn.addEventListener('click', printQRCode);
+
         // Cerrar modales al hacer clic fuera del card
         window.addEventListener('click', (e) => {
             if (e.target === editModal) closeEditModal();
             if (e.target === deleteModal) closeDeleteModal();
             if (e.target === confirmClearModal) closeClearModal();
+            if (e.target === qrModal) closeQRCodeModal();
         });
 
         // --- EVENT LISTENERS DE ASISTENCIA ---
@@ -329,9 +346,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Generar ID único oculto para el registro (ej. ALU-2026-LX8K2M)
+        const uniqueId = `ALU-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`;
+
         // Crear objeto de alumno
         const newStudent = {
-            id: Date.now().toString(), // ID único basado en timestamp
+            id: uniqueId,
             group: group,
             paternalLastName: paternal,
             maternalLastName: maternal,
@@ -360,6 +380,9 @@ document.addEventListener('DOMContentLoaded', () => {
             `${firstName} ${paternal} ha sido agregado correctamente.`, 
             'success'
         );
+
+        // Generar y mostrar el Código QR del nuevo alumno
+        showQRCodeModal(newStudent);
     }
 
     // Guardar cambios persistentes
@@ -424,6 +447,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td class="col-actions">
                     <div class="action-buttons">
                         <button 
+                            class="btn-action btn-qr-row" 
+                            data-id="${student.id}" 
+                            title="Ver Código QR"
+                            aria-label="Ver QR de ${escapeHTML(student.firstName)}"
+                        >
+                            <i class="fa-solid fa-qrcode"></i>
+                        </button>
+                        <button 
                             class="btn-action btn-edit-row" 
                             data-id="${student.id}" 
                             title="Editar Alumno"
@@ -447,6 +478,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Registrar dinámicamente eventos para botones de acciones en la tabla
+        document.querySelectorAll('.btn-qr-row').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const studentId = btn.getAttribute('data-id');
+                const targetStudent = students.find(s => s.id === studentId);
+                if (targetStudent) {
+                    showQRCodeModal(targetStudent);
+                }
+            });
+        });
+
         document.querySelectorAll('.btn-edit-row').forEach(btn => {
             btn.addEventListener('click', () => openEditModal(btn.getAttribute('data-id')));
         });
@@ -717,6 +758,92 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
+    // --- MODAL Y GENERACIÓN DE CÓDIGO QR ---
+    function showQRCodeModal(student) {
+        if (!student) return;
+        currentQRStudent = student;
+
+        const fullName = `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`;
+        if (qrStudentName) qrStudentName.textContent = fullName;
+        if (qrStudentGroup) qrStudentGroup.innerHTML = `<i class="fa-solid fa-users-rectangle"></i> Grupo: <strong>${escapeHTML(student.group)}</strong>`;
+        if (qrStudentEmail) qrStudentEmail.innerHTML = `<i class="fa-solid fa-envelope"></i> Correo: <strong>${escapeHTML(student.email || 'N/A')}</strong>`;
+
+        if (qrCodeContainer) {
+            qrCodeContainer.innerHTML = '';
+
+            const qrData = JSON.stringify({
+                escuela: "CBTis 111",
+                id: student.id,
+                nombre: fullName,
+                grupo: student.group,
+                correo: student.email
+            });
+
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrCodeContainer, {
+                    text: qrData,
+                    width: 180,
+                    height: 180,
+                    colorDark: "#0F172A",
+                    colorLight: "#FFFFFF",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } else {
+                const img = document.createElement('img');
+                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
+                img.alt = `QR ${student.firstName}`;
+                qrCodeContainer.appendChild(img);
+            }
+        }
+
+        if (qrModal) {
+            qrModal.classList.add('active');
+            qrModal.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    function closeQRCodeModal() {
+        if (qrModal) {
+            qrModal.classList.remove('active');
+            qrModal.setAttribute('aria-hidden', 'true');
+        }
+        currentQRStudent = null;
+    }
+
+    function downloadQRCode() {
+        if (!currentQRStudent || !qrCodeContainer) return;
+
+        const qrCanvas = qrCodeContainer.querySelector('canvas');
+        const qrImg = qrCodeContainer.querySelector('img');
+
+        let imageSrc = '';
+        if (qrCanvas) {
+            imageSrc = qrCanvas.toDataURL('image/png');
+        } else if (qrImg) {
+            imageSrc = qrImg.src;
+        }
+
+        if (!imageSrc) {
+            showToast('Error', 'No se pudo generar la imagen del código QR.', 'danger');
+            return;
+        }
+
+        const link = document.createElement('a');
+        const fileName = `QR_${currentQRStudent.paternalLastName}_${currentQRStudent.firstName}_${currentQRStudent.group}.png`
+            .replace(/\s+/g, '_');
+        link.download = fileName;
+        link.href = imageSrc;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast('QR Descargado', `Se ha guardado la imagen QR de ${currentQRStudent.firstName}.`, 'success');
+    }
+
+    function printQRCode() {
+        window.print();
+    }
+
 
 
     // --- EXPORTAR A CSV (UTF-8 con BOM para soporte Excel) ---
@@ -738,20 +865,21 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/[\/\\?%*:|"<>.]/g, '')
             .replace(/\s+/g, '_');
 
-        // Cabecera del archivo CSV
-        let csvContent = `Grupo Escolar: ${rawGroup}\nNº,Apellido Paterno,Apellido Materno,Nombre(s),Correo Electrónico\n`;
+        // Cabecera del archivo CSV con el ID Único del alumno
+        let csvContent = `Grupo Escolar: ${rawGroup}\nNº,ID Alumno,Apellido Paterno,Apellido Materno,Nombre(s),Correo Electrónico\n`;
 
         // Mapeo y formateo de filas
         students.forEach((student, index) => {
             const num = index + 1;
             
             // Sanitizar valores (escapar comillas dobles y englobar entre comillas si es necesario)
+            const studentId = escapeCSVField(student.id || '');
             const paternal = escapeCSVField(student.paternalLastName);
             const maternal = escapeCSVField(student.maternalLastName);
             const name = escapeCSVField(student.firstName);
             const email = escapeCSVField(student.email || '');
 
-            csvContent += `${num},${paternal},${maternal},${name},${email}\n`;
+            csvContent += `${num},${studentId},${paternal},${maternal},${name},${email}\n`;
         });
 
         // Agregar la marca de orden de bytes (BOM) UTF-8 (\uFEFF) para que Excel reconozca la codificación automáticamente
