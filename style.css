@@ -1101,98 +1101,6 @@ body {
     box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
 }
 
-/* --- Tarjetas de Métricas de Asistencia --- */
-.mini-stat-card {
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-md);
-    padding: 0.8rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: transform var(--transition-fast), border-color var(--transition-fast);
-}
-
-.mini-stat-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(255, 255, 255, 0.12);
-}
-
-.mini-stat-label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-muted);
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.mini-stat-value {
-    font-family: var(--font-heading);
-    font-size: 1.35rem;
-    font-weight: 700;
-}
-
-/* --- Control de Asistencia Segmentado --- */
-.attendance-options {
-    display: flex;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--border-glass);
-    border-radius: var(--radius-sm);
-    padding: 2px;
-    gap: 2px;
-    width: fit-content;
-    margin: 0 auto;
-}
-
-.att-btn {
-    border: none;
-    background: none;
-    color: var(--text-secondary);
-    font-family: var(--font-body);
-    font-weight: 600;
-    font-size: 0.72rem;
-    padding: 0.4rem 0.75rem;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    outline: none;
-    text-transform: uppercase;
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-}
-
-.att-btn:hover {
-    color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.att-btn.att-present.active {
-    background: var(--success-gradient);
-    color: white;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-}
-
-.att-btn.att-late.active {
-    background: var(--warning-gradient);
-    color: white;
-    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
-}
-
-.att-btn.att-absent.active {
-    background: var(--danger-gradient);
-    color: white;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-}
-
-/* Asegurar que las columnas de la tabla de asistencia sean legibles y centradas */
-#attendance-table td {
-    vertical-align: middle;
-}
-
 /* --- Botón de Acción QR en Tabla --- */
 .btn-qr-row:hover {
     background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
@@ -1205,6 +1113,11 @@ body {
 .modal-card-qr {
     max-width: 440px;
     text-align: center;
+}
+
+.modal-card-qr .modal-footer {
+    justify-content: center;
+    margin-top: 0.5rem;
 }
 
 .qr-modal-body {

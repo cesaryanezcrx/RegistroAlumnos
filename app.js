@@ -178,11 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let studentToEditId = null;
     let studentToDeleteId = null;
 
-    // --- ESTADO DE ASISTENCIA ---
-    let attendanceStudents = [];
-    let attendanceHistory = {};
-    let attendanceFilter = '';
-
     // --- ELEMENTOS DEL DOM ---
     // Formulario de Registro
     const registrationForm = document.getElementById('registration-form');
@@ -212,27 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Elementos de Pestañas y Vistas
     const tabButtons = document.querySelectorAll('.tab-btn');
     const viewRegistro = document.getElementById('view-registro');
-    const viewAsistencia = document.getElementById('view-asistencia');
     const viewEscaneo = document.getElementById('view-escaneo');
-    
-    const attDateInput = document.getElementById('attendance-date');
-    const btnImportFromRegistry = document.getElementById('btn-import-from-registry');
-    const attGroupDbSelect = document.getElementById('att-group-db-select');
-    const btnExportHistory = document.getElementById('btn-export-history');
-    const btnImportHistoryTrigger = document.getElementById('btn-import-history-trigger');
-    const importHistoryFile = document.getElementById('import-history-file');
-    
-    const attSearchInput = document.getElementById('attendance-search-input');
-    const attClearSearchBtn = document.getElementById('attendance-clear-search');
-    const attTable = document.getElementById('attendance-table');
-    const attTableBody = document.getElementById('attendance-table-body');
-    const attEmptyState = document.getElementById('attendance-empty-state-view');
-    const attNoResults = document.getElementById('attendance-no-results-view');
-    
-    const attStatTotal = document.getElementById('att-stat-total');
-    const attStatPresent = document.getElementById('att-stat-present');
-    const attStatAbsent = document.getElementById('att-stat-absent');
-    const attStatPercent = document.getElementById('att-stat-percent');
 
     // Elementos del Escáner QR
     const btnStartCamera = document.getElementById('btn-start-camera');
@@ -298,42 +273,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Cargar asistencia desde LocalStorage
-        const savedAttStudents = localStorage.getItem('cbtis_attendance_students');
-        if (savedAttStudents) {
-            try {
-                attendanceStudents = JSON.parse(savedAttStudents);
-            } catch (e) {
-                console.error("Error al cargar alumnos de asistencia:", e);
-                attendanceStudents = [];
-            }
-        }
-
-        const savedAttHistory = localStorage.getItem('cbtis_attendance_history');
-        if (savedAttHistory) {
-            try {
-                attendanceHistory = JSON.parse(savedAttHistory);
-            } catch (e) {
-                console.error("Error al cargar historial de asistencia:", e);
-                attendanceHistory = {};
-            }
-        }
-
-        // Fecha de asistencia por defecto a hoy (local)
-        const localToday = new Date();
-        const year = localToday.getFullYear();
-        const month = String(localToday.getMonth() + 1).padStart(2, '0');
-        const day = String(localToday.getDate()).padStart(2, '0');
-        const todayStr = `${year}-${month}-${day}`;
-        if (attDateInput) {
-            attDateInput.value = todayStr;
-        }
-
         setCurrentDate();
         setupEventListeners();
 
         render();
-        renderAttendance();
 
         const currentActiveGroup = groupInput.value.trim();
         showToast(
@@ -347,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- MANEJO DE SELECCIÓN Y CARGA DE BD POR GRUPO ---
     async function loadGroupFromDB(groupName) {
-        const trimmed = groupName.trim().toUpperCase();
+        const trimmed = (groupName || '').trim().toUpperCase();
         if (!trimmed) {
             students = [];
             render();
@@ -385,16 +328,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 opt.textContent = `Grupo ${grp}`;
                 if (grp === currentActive) opt.selected = true;
                 groupDbSelect.appendChild(opt);
-            });
-        }
-
-        if (attGroupDbSelect) {
-            attGroupDbSelect.innerHTML = '<option value="">-- Cargar de otra BD de Grupo --</option>';
-            groups.forEach(grp => {
-                const opt = document.createElement('option');
-                opt.value = grp;
-                opt.textContent = `Grupo ${grp}`;
-                attGroupDbSelect.appendChild(opt);
             });
         }
     }
@@ -485,19 +418,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === qrModal) closeQRCodeModal();
         });
 
-        // --- EVENT LISTENERS DE ASISTENCIA Y PESTAÑAS ---
+        // --- EVENT LISTENERS DE PESTAÑAS ---
         setupTabs();
-
-        btnImportFromRegistry.addEventListener('click', importFromRegistry);
-        if (attGroupDbSelect) attGroupDbSelect.addEventListener('change', handleAttGroupSelect);
-
-        btnExportHistory.addEventListener('click', exportAttendanceHistory);
-        btnImportHistoryTrigger.addEventListener('click', () => importHistoryFile.click());
-        importHistoryFile.addEventListener('change', handleImportHistory);
-
-        attSearchInput.addEventListener('input', handleAttendanceSearch);
-        attClearSearchBtn.addEventListener('click', handleAttendanceClearSearch);
-        attDateInput.addEventListener('change', () => renderAttendance());
     }
 
 
@@ -1093,9 +1015,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const qrImg = qrCodeContainer.querySelector('img');
 
         let imageSrc = '';
-        if (qrCanvas) {
-            imageSrc = qrCanvas.toDataURL('image/png');
-        } else if (qrImg) {
+        if (qrCanvas && qrCanvas.width > 0) {
+            try {
+                imageSrc = qrCanvas.toDataURL('image/png');
+            } catch (e) {
+                console.error('Error al convertir canvas a dataURL:', e);
+            }
+        }
+        if (!imageSrc && qrImg && qrImg.src) {
             imageSrc = qrImg.src;
         }
 
@@ -1104,16 +1031,20 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const firstName = (currentQRStudent.firstName || 'Alumno').trim();
+        const lastName = (currentQRStudent.paternalLastName || '').trim();
+        const group = (currentQRStudent.group || '').trim();
+        const rawName = [lastName, firstName, group].filter(Boolean).join('_');
+        const fileName = `QR_${rawName || 'Alumno'}.png`.replace(/\s+/g, '_');
+
         const link = document.createElement('a');
-        const fileName = `QR_${currentQRStudent.paternalLastName}_${currentQRStudent.firstName}_${currentQRStudent.group}.png`
-            .replace(/\s+/g, '_');
         link.download = fileName;
         link.href = imageSrc;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        showToast('QR Descargado', `Se ha guardado la imagen QR de ${currentQRStudent.firstName}.`, 'success');
+        showToast('QR Descargado', `Se ha descargado la imagen del código QR de ${firstName}.`, 'success');
     }
 
     function printQRCode() {
@@ -1326,7 +1257,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- FUNCIONES Y LÓGICA DE ASISTENCIA Y PESTAÑAS ---
+    // --- NAVEGACIÓN DE PESTAÑAS ---
 
     function setupTabs() {
         tabButtons.forEach(btn => {
@@ -1336,254 +1267,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const targetTab = btn.getAttribute('data-tab');
 
                 viewRegistro.style.display = 'none';
-                viewAsistencia.style.display = 'none';
                 if (viewEscaneo) viewEscaneo.style.display = 'none';
 
                 if (targetTab === 'registro') {
                     viewRegistro.style.display = 'grid';
-                    stopCameraScanner();
-                } else if (targetTab === 'asistencia') {
-                    viewAsistencia.style.display = 'grid';
-                    renderAttendance();
                     stopCameraScanner();
                 } else if (targetTab === 'escaneo') {
                     if (viewEscaneo) viewEscaneo.style.display = 'grid';
                 }
             });
         });
-    }
-
-    function importFromRegistry() {
-        if (students.length === 0) {
-            showToast('Lista Vacía', 'No hay alumnos en el grupo activo para cargar en asistencia.', 'warning');
-            return;
-        }
-
-        attendanceStudents = students.map(student => ({
-            id: student.id,
-            name: `${student.paternalLastName} ${student.maternalLastName} ${student.firstName}`,
-            email: student.email || ''
-        }));
-
-        attendanceStudents.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-
-        saveAttendanceToLocalStorage();
-        renderAttendance();
-
-        showToast('Alumnos Cargados', `Se cargaron ${attendanceStudents.length} alumnos del grupo actual.`, 'success');
-    }
-
-    async function handleAttGroupSelect(e) {
-        const selectedGroup = e.target.value;
-        if (!selectedGroup) return;
-
-        try {
-            const groupStudents = await GroupDBManager.getStudents(selectedGroup);
-            if (groupStudents.length === 0) {
-                showToast('Base de Datos Vacía', `El grupo ${selectedGroup} no tiene alumnos registrados.`, 'warning');
-                return;
-            }
-
-            attendanceStudents = groupStudents.map(student => ({
-                id: student.id,
-                name: `${student.paternalLastName} ${student.maternalLastName} ${student.firstName}`,
-                email: student.email || ''
-            }));
-
-            attendanceStudents.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-
-            saveAttendanceToLocalStorage();
-            renderAttendance();
-
-            showToast('BD de Grupo Cargada', `Se cargaron ${attendanceStudents.length} alumnos del grupo ${selectedGroup}.`, 'success');
-            attGroupDbSelect.value = '';
-        } catch (err) {
-            console.error("Error al cargar grupo para asistencia:", err);
-            showToast('Error', `No se pudo abrir la BD del grupo ${selectedGroup}.`, 'danger');
-        }
-    }
-
-    function renderAttendance() {
-        const date = attDateInput.value;
-        if (!date) return;
-
-        const filtered = attendanceStudents.filter(student => {
-            const query = attendanceFilter.toLowerCase().trim();
-            if (query === '') return true;
-            return student.name.toLowerCase().includes(query) || student.email.toLowerCase().includes(query);
-        });
-
-        if (attendanceStudents.length === 0) {
-            attEmptyState.style.display = 'flex';
-            attNoResults.style.display = 'none';
-            attTable.style.display = 'none';
-        } else if (filtered.length === 0) {
-            attEmptyState.style.display = 'none';
-            attNoResults.style.display = 'flex';
-            attTable.style.display = 'none';
-        } else {
-            attEmptyState.style.display = 'none';
-            attNoResults.style.display = 'none';
-            attTable.style.display = 'table';
-        }
-
-        if (!attendanceHistory[date]) {
-            attendanceHistory[date] = {};
-        }
-        const dayRecords = attendanceHistory[date];
-
-        attTableBody.innerHTML = '';
-        filtered.forEach((student, index) => {
-            if (!dayRecords[student.id]) {
-                dayRecords[student.id] = 'present';
-            }
-            const status = dayRecords[student.id];
-
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td class="col-num">${index + 1}</td>
-                <td><strong style="color: var(--text-primary); font-weight: 500;">${escapeHTML(student.name)}</strong></td>
-                <td>
-                    <div class="attendance-options" data-student-id="${student.id}">
-                        <button class="att-btn att-present ${status === 'present' ? 'active' : ''}" data-status="present" aria-label="Presente">
-                            <i class="fa-solid fa-check"></i> Pres
-                        </button>
-                        <button class="att-btn att-absent ${status === 'absent' ? 'active' : ''}" data-status="absent" aria-label="Ausente">
-                            <i class="fa-solid fa-xmark"></i> Aus
-                        </button>
-                    </div>
-                </td>
-            `;
-            attTableBody.appendChild(row);
-        });
-
-        document.querySelectorAll('.attendance-options').forEach(group => {
-            const studentId = group.getAttribute('data-student-id');
-            group.querySelectorAll('.att-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const status = btn.getAttribute('data-status');
-                    
-                    group.querySelectorAll('.att-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-
-                    attendanceHistory[date][studentId] = status;
-                    
-                    saveAttendanceToLocalStorage();
-                    updateAttendanceStats();
-                });
-            });
-        });
-
-        updateAttendanceStats();
-    }
-
-    function updateAttendanceStats() {
-        const date = attDateInput.value;
-        if (!date || attendanceStudents.length === 0) {
-            attStatTotal.textContent = '0';
-            attStatPresent.textContent = '0';
-            attStatAbsent.textContent = '0';
-            attStatPercent.textContent = '0%';
-            return;
-        }
-
-        const dayRecords = attendanceHistory[date] || {};
-        let total = attendanceStudents.length;
-        let present = 0;
-        let absent = 0;
-
-        attendanceStudents.forEach(student => {
-            const status = dayRecords[student.id] || 'present';
-            if (status === 'present') present++;
-            else if (status === 'absent') absent++;
-            else if (status === 'late') present++;
-        });
-
-        attStatTotal.textContent = total;
-        attStatPresent.textContent = present;
-        attStatAbsent.textContent = absent;
-
-        const percent = total > 0 ? Math.round((present / total) * 100) : 0;
-        attStatPercent.textContent = `${percent}%`;
-    }
-
-    function saveAttendanceToLocalStorage() {
-        localStorage.setItem('cbtis_attendance_students', JSON.stringify(attendanceStudents));
-        localStorage.setItem('cbtis_attendance_history', JSON.stringify(attendanceHistory));
-    }
-
-    function handleAttendanceSearch(e) {
-        attendanceFilter = e.target.value;
-        if (attendanceFilter.length > 0) {
-            attClearSearchBtn.style.display = 'flex';
-        } else {
-            attClearSearchBtn.style.display = 'none';
-        }
-        renderAttendance();
-    }
-
-    function handleAttendanceClearSearch() {
-        attSearchInput.value = '';
-        attendanceFilter = '';
-        attClearSearchBtn.style.display = 'none';
-        attSearchInput.focus();
-        renderAttendance();
-    }
-
-    function exportAttendanceHistory() {
-        if (attendanceStudents.length === 0) {
-            showToast('Exportación Fallida', 'No hay datos de alumnos para exportar.', 'warning');
-            return;
-        }
-
-        const backupData = {
-            students: attendanceStudents,
-            history: attendanceHistory
-        };
-
-        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        
-        const today = new Date();
-        const dateStr = today.toISOString().split('T')[0];
-        
-        link.setAttribute('href', url);
-        link.setAttribute('download', `respaldo_asistencia_${dateStr}.json`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        showToast('Exportación Exitosa', 'El historial del semestre ha sido descargado en formato JSON.', 'success');
-    }
-
-    function handleImportHistory(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            try {
-                const data = JSON.parse(evt.target.result);
-                if (!data.students || !data.history) {
-                    showToast('Importación Fallida', 'El archivo no tiene el formato de respaldo correcto.', 'danger');
-                    return;
-                }
-
-                attendanceStudents = data.students;
-                attendanceHistory = data.history;
-
-                saveAttendanceToLocalStorage();
-                renderAttendance();
-
-                showToast('Respaldo Restaurado', `Se importaron ${attendanceStudents.length} alumnos e historial con éxito.`, 'success');
-            } catch (err) {
-                showToast('Error', 'No se pudo procesar el archivo JSON de respaldo.', 'danger');
-            }
-            importHistoryFile.value = '';
-        };
-        reader.readAsText(file);
     }
 
     // --- EJECUTAR INICIO DE APP ---

@@ -54,9 +54,6 @@
             <button class="tab-btn active" id="tab-btn-registro" data-tab="registro">
                 <i class="fa-solid fa-user-plus"></i> Registro de Alumnos
             </button>
-            <button class="tab-btn" id="tab-btn-asistencia" data-tab="asistencia">
-                <i class="fa-solid fa-calendar-check"></i> Control de Asistencia
-            </button>
             <button class="tab-btn" id="tab-btn-escaneo" data-tab="escaneo">
                 <i class="fa-solid fa-qrcode"></i> Lector QR
             </button>
@@ -200,143 +197,7 @@
             </section>
         </main>
 
-        <!-- View 2: Control de Asistencia Workspace -->
-        <main class="app-workspace tab-content" id="view-asistencia" style="display: none;">
-            <!-- Left Side: Controls & Summary -->
-            <section class="workspace-form card">
-                <div class="card-header">
-                    <i class="fa-solid fa-gears card-icon"></i>
-                    <h2>Controles y Resumen</h2>
-                </div>
-
-                <!-- Date Selector -->
-                <div class="input-group" style="margin-bottom: 1.2rem;">
-                    <label for="attendance-date">
-                        <i class="fa-solid fa-calendar-days input-icon"></i> Fecha de Asistencia
-                    </label>
-                    <input type="date" id="attendance-date" required>
-                </div>
-
-                <!-- Database Student Load Controls -->
-                <div class="form-actions"
-                    style="display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.2rem;">
-                    <button type="button" class="btn btn-secondary" id="btn-import-from-registry" style="width: 100%;">
-                        <i class="fa-solid fa-users"></i> Cargar del Grupo Actual
-                    </button>
-
-                    <div class="db-att-selector-wrapper" style="position: relative; width: 100%;">
-                        <select id="att-group-db-select" class="db-select" style="width: 100%;">
-                            <option value="">-- Cargar de otra BD de Grupo --</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-divider"></div>
-
-                <!-- Backup Import/Export Controls -->
-                <div class="card-header" style="margin-top: 1.2rem; margin-bottom: 1rem; padding-bottom: 0.5rem;">
-                    <i class="fa-solid fa-floppy-disk card-icon" style="font-size: 1.1rem;"></i>
-                    <h3 style="font-size: 1.1rem; font-family: var(--font-heading);">Respaldo del Semestre</h3>
-                </div>
-                <div class="form-actions" style="display: flex; gap: 0.8rem; margin-bottom: 1.5rem;">
-                    <button type="button" class="btn btn-primary" id="btn-export-history"
-                        style="flex: 1; font-size: 0.85rem;" title="Exportar todo el historial del semestre">
-                        <i class="fa-solid fa-download"></i> Exportar
-                    </button>
-                    <button type="button" class="btn btn-secondary" id="btn-import-history-trigger"
-                        style="flex: 1; font-size: 0.85rem;" title="Importar historial de asistencia">
-                        <i class="fa-solid fa-upload"></i> Importar
-                    </button>
-                    <input type="file" id="import-history-file" accept=".json" style="display: none;">
-                </div>
-
-                <div class="form-divider"></div>
-
-                <!-- Attendance Stats Summary -->
-                <div class="attendance-summary" style="margin-top: 1.2rem;">
-                    <h3
-                        style="font-size: 1.1rem; font-family: var(--font-heading); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <i class="fa-solid fa-chart-pie text-accent"></i> Resumen del Día
-                    </h3>
-                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem;">
-                        <div class="mini-stat-card">
-                            <span class="mini-stat-label">Total</span>
-                            <span class="mini-stat-value" id="att-stat-total">0</span>
-                        </div>
-                        <div class="mini-stat-card">
-                            <span class="mini-stat-label">Presentes</span>
-                            <span class="mini-stat-value text-success" id="att-stat-present">0</span>
-                        </div>
-                        <div class="mini-stat-card">
-                            <span class="mini-stat-label">Ausentes</span>
-                            <span class="mini-stat-value text-danger" id="att-stat-absent">0</span>
-                        </div>
-                    </div>
-                    <div class="mini-stat-card"
-                        style="margin-top: 0.8rem; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 0.8rem 1.2rem;">
-                        <span class="mini-stat-label" style="margin-bottom: 0;">% Asistencia</span>
-                        <span class="mini-stat-value" id="att-stat-percent"
-                            style="font-size: 1.5rem; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0%</span>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Right Side: Attendance Table -->
-            <section class="workspace-records card">
-                <div class="records-toolbar">
-                    <div class="search-bar">
-                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="attendance-search-input" placeholder="Buscar alumnos en asistencia..."
-                            aria-label="Buscar alumnos">
-                        <button id="attendance-clear-search" class="btn-clear" aria-label="Limpiar búsqueda"
-                            style="display: none;">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>
-                    </div>
-                    <span id="autosave-status"
-                        style="font-size: 0.8rem; color: var(--success); font-weight: 500; display: flex; align-items: center; gap: 0.4rem;">
-                        <i class="fa-solid fa-circle-check animate-pulse"></i> Auto-guardado activo
-                    </span>
-                </div>
-
-                <!-- Attendance Table Container -->
-                <div class="table-container">
-                    <table class="students-table" id="attendance-table">
-                        <thead>
-                            <tr>
-                                <th class="col-num">#</th>
-                                <th>Alumno</th>
-                                <th style="text-align: center; width: 220px;">Asistencia</th>
-                            </tr>
-                        </thead>
-                        <tbody id="attendance-table-body">
-                            <!-- Rows will be injected dynamically by JS -->
-                        </tbody>
-                    </table>
-
-                    <!-- Attendance Empty State -->
-                    <div class="empty-state" id="attendance-empty-state-view">
-                        <div class="empty-illustration">
-                            <i class="fa-solid fa-clipboard-user"></i>
-                        </div>
-                        <h3>No hay alumnos cargados</h3>
-                        <p>Carga un archivo CSV o importa los alumnos registrados en la primera pestaña para iniciar el
-                            pase de lista.</p>
-                    </div>
-
-                    <!-- Attendance No Results State -->
-                    <div class="empty-state" id="attendance-no-results-view" style="display: none;">
-                        <div class="empty-illustration">
-                            <i class="fa-solid fa-user-slash"></i>
-                        </div>
-                        <h3>Sin resultados</h3>
-                        <p>No se encontraron alumnos que coincidan con la búsqueda.</p>
-                    </div>
-                </div>
-            </section>
-        </main>
-
-        <!-- View 3: Escáner de Código QR Workspace -->
+        <!-- View 2: Escáner de Código QR Workspace -->
         <main class="app-workspace tab-content" id="view-escaneo" style="display: none;">
             <!-- Left Side: Scanner & Camera Feed / File Upload -->
             <section class="workspace-form card">
@@ -526,6 +387,14 @@
                 </div>
                 <p class="qr-hint"><i class="fa-solid fa-circle-info"></i> Código QR listo para escaneo y verificación
                     de información.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="qr-modal-print-btn">
+                    <i class="fa-solid fa-print"></i> Imprimir Credencial
+                </button>
+                <button class="btn btn-primary" id="qr-modal-download-btn">
+                    <i class="fa-solid fa-download"></i> Descargar QR
+                </button>
             </div>
         </div>
     </div>
