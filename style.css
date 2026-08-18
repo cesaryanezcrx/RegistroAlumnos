@@ -1313,4 +1313,45 @@ body {
     }
 }
 
+/* --- Estilos para el Lector de Códigos QR --- */
+#qr-reader {
+    border: 1px solid var(--border-glass) !important;
+    border-radius: var(--radius-md) !important;
+    background: rgba(0, 0, 0, 0.4) !important;
+    overflow: hidden !important;
+}
+
+#qr-reader video {
+    border-radius: var(--radius-md) !important;
+    object-fit: cover !important;
+    width: 100% !important;
+}
+
+#qr-reader img[alt="Info icon"],
+#qr-reader img[alt="Camera icon"] {
+    display: none !important;
+}
+
+#qr-reader__scan_region {
+    background: rgba(0, 0, 0, 0.2) !important;
+}
+
+#qr-reader__dashboard {
+    padding: 0.5rem !important;
+    background: transparent !important;
+    color: var(--text-muted) !important;
+}
+
+.result-badge.success {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: var(--success) !important;
+    border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+.result-badge.warning {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: var(--warning) !important;
+    border: 1px solid rgba(245, 158, 11, 0.3) !important;
+}
+
 

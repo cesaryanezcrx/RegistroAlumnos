@@ -15,6 +15,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- QRCode.js Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Html5Qrcode Reader Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- Custom Style -->
     <link rel="stylesheet" href="style.css">
 </head>
@@ -52,8 +54,11 @@
             <button class="tab-btn active" id="tab-btn-registro" data-tab="registro">
                 <i class="fa-solid fa-user-plus"></i> Registro de Alumnos
             </button>
-            <button class="tab-btn" id="tab-btn-asistencia" data-tab="asistencia" style="display: none;">
+            <button class="tab-btn" id="tab-btn-asistencia" data-tab="asistencia">
                 <i class="fa-solid fa-calendar-check"></i> Control de Asistencia
+            </button>
+            <button class="tab-btn" id="tab-btn-escaneo" data-tab="escaneo">
+                <i class="fa-solid fa-qrcode"></i> Lector QR
             </button>
         </nav>
 
@@ -331,7 +336,97 @@
             </section>
         </main>
 
+        <!-- View 3: Escáner de Código QR Workspace -->
+        <main class="app-workspace tab-content" id="view-escaneo" style="display: none;">
+            <!-- Left Side: Scanner & Camera Feed / File Upload -->
+            <section class="workspace-form card">
+                <div class="card-header">
+                    <i class="fa-solid fa-camera card-icon"></i>
+                    <h2>Lector y Escáner QR</h2>
+                </div>
+                
+                <div class="scanner-container" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div id="qr-reader" style="width: 100%; border-radius: var(--radius-md); overflow: hidden; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass);"></div>
+                    
+                    <div class="scanner-actions" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                        <button type="button" class="btn btn-primary" id="btn-start-camera" style="width: 100%;">
+                            <i class="fa-solid fa-video"></i> Iniciar Cámara
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="btn-stop-camera" style="width: 100%; display: none;">
+                            <i class="fa-solid fa-video-slash"></i> Detener Cámara
+                        </button>
+                        
+                        <div class="form-divider" style="margin: 0.2rem 0;"></div>
+                        
+                        <div class="qr-file-upload-wrapper">
+                            <label for="qr-input-file" class="btn btn-secondary" style="width: 100%; cursor: pointer; text-align: center; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                <i class="fa-solid fa-file-image"></i> Cargar Imagen con QR
+                            </label>
+                            <input type="file" id="qr-input-file" accept="image/*" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+            </section>
 
+            <!-- Right Side: Scanned Results Card -->
+            <section class="workspace-records card">
+                <div class="card-header">
+                    <i class="fa-solid fa-id-card card-icon"></i>
+                    <h2>Información del Alumno Decodificada</h2>
+                </div>
+
+                <!-- Empty state when no QR scanned -->
+                <div id="qr-scan-empty-state" class="empty-state" style="display: flex; padding: 3rem 1.5rem; text-align: center; flex-direction: column; align-items: center; justify-content: center;">
+                    <div class="empty-illustration" style="font-size: 3.5rem; color: var(--accent-red); margin-bottom: 1rem;">
+                        <i class="fa-solid fa-qrcode animate-pulse"></i>
+                    </div>
+                    <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--text-primary);">Escáner Listo</h3>
+                    <p style="color: var(--text-muted); max-width: 400px; font-size: 0.9rem; line-height: 1.5;">Activa la cámara o sube una imagen con un código QR para leer y desplegar automáticamente la información del alumno.</p>
+                </div>
+
+                <!-- Result Card when QR is scanned -->
+                <div id="qr-scan-result-card" class="qr-result-card" style="display: none; padding: 1.5rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); border-radius: var(--radius-lg);">
+                    <div class="result-badge-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; flex-wrap: wrap; gap: 0.5rem;">
+                        <span id="qr-result-badge" class="result-badge" style="padding: 0.4rem 0.9rem; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600;">
+                            <i class="fa-solid fa-circle-check"></i> Código QR Válido
+                        </span>
+                        <span id="qr-result-time" style="font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
+                            <i class="fa-regular fa-clock"></i> --:--
+                        </span>
+                    </div>
+
+                    <div class="result-details-grid" style="display: flex; flex-direction: column; gap: 1.2rem;">
+                        <div class="detail-item" style="background: rgba(0, 0, 0, 0.25); padding: 1rem; border-radius: var(--radius-md); border-left: 3px solid var(--accent-red);">
+                            <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Alumno</span>
+                            <strong id="qr-res-name" style="font-size: 1.25rem; color: var(--text-primary); font-family: var(--font-heading);">--</strong>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div class="detail-item" style="background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: var(--radius-md);">
+                                <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Grupo Escolar</span>
+                                <span id="qr-res-group" style="font-size: 1rem; color: var(--text-primary); font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+                                    <i class="fa-solid fa-users-rectangle text-accent"></i> --
+                                </span>
+                            </div>
+                            <div class="detail-item" style="background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: var(--radius-md);">
+                                <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">ID de Registro</span>
+                                <span id="qr-res-id" style="font-size: 0.85rem; color: var(--text-primary); font-family: monospace; background: rgba(255,255,255,0.05); padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block;">--</span>
+                            </div>
+                        </div>
+
+                        <div class="detail-item" style="background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: var(--radius-md);">
+                            <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Correo Electrónico</span>
+                            <span id="qr-res-email" style="font-size: 0.95rem; color: var(--text-primary); word-break: break-all;">--</span>
+                        </div>
+
+                        <div class="detail-item" id="qr-res-raw-wrapper" style="margin-top: 0.3rem; padding-top: 0.8rem; border-top: 1px dashed var(--border-glass);">
+                            <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">Contenido QR Decodificado</span>
+                            <pre id="qr-res-raw" style="font-size: 0.8rem; color: var(--text-muted); background: rgba(0,0,0,0.3); padding: 0.8rem; border-radius: 6px; white-space: pre-wrap; word-break: break-all; margin: 0; font-family: monospace; border: 1px solid var(--border-glass);"></pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
 
         <!-- Footer -->
         <footer class="app-footer">

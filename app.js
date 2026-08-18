@@ -3,6 +3,7 @@
  * LÓGICA DE NEGOCIO - REGISTRO DE ALUMNOS (CBTis)
  * Almacenamiento: Base de Datos independiente por Grupo en IndexedDB.
  * Notificaciones Toast custom, modals premium y búsqueda interactiva.
+ * Lector de Códigos QR (Html5Qrcode scanner & file decode).
  * ==========================================================================
  */
 
@@ -208,10 +209,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const totalCountSpan = document.getElementById('total-count');
     const currentDateSpan = document.getElementById('current-date');
 
-    // Elementos de la Pestaña Asistencia
+    // Elementos de Pestañas y Vistas
     const tabButtons = document.querySelectorAll('.tab-btn');
     const viewRegistro = document.getElementById('view-registro');
     const viewAsistencia = document.getElementById('view-asistencia');
+    const viewEscaneo = document.getElementById('view-escaneo');
     
     const attDateInput = document.getElementById('attendance-date');
     const btnImportFromRegistry = document.getElementById('btn-import-from-registry');
@@ -231,6 +233,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const attStatPresent = document.getElementById('att-stat-present');
     const attStatAbsent = document.getElementById('att-stat-absent');
     const attStatPercent = document.getElementById('att-stat-percent');
+
+    // Elementos del Escáner QR
+    const btnStartCamera = document.getElementById('btn-start-camera');
+    const btnStopCamera = document.getElementById('btn-stop-camera');
+    const qrInputFile = document.getElementById('qr-input-file');
+    const qrScanEmptyState = document.getElementById('qr-scan-empty-state');
+    const qrScanResultCard = document.getElementById('qr-scan-result-card');
+
+    let html5QrCode = null;
+    let isScannerRunning = false;
 
     // Contenedores Toast
     const toastContainer = document.getElementById('toast-container');
@@ -460,6 +472,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (qrModalDownloadBtn) qrModalDownloadBtn.addEventListener('click', downloadQRCode);
         if (qrModalPrintBtn) qrModalPrintBtn.addEventListener('click', printQRCode);
 
+        // Escáner QR Controles
+        if (btnStartCamera) btnStartCamera.addEventListener('click', startCameraScanner);
+        if (btnStopCamera) btnStopCamera.addEventListener('click', stopCameraScanner);
+        if (qrInputFile) qrInputFile.addEventListener('change', handleQrFileUpload);
+
         // Cerrar modales al hacer clic fuera del card
         window.addEventListener('click', (e) => {
             if (e.target === editModal) closeEditModal();
@@ -468,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === qrModal) closeQRCodeModal();
         });
 
-        // --- EVENT LISTENERS DE ASISTENCIA ---
+        // --- EVENT LISTENERS DE ASISTENCIA Y PESTAÑAS ---
         setupTabs();
 
         btnImportFromRegistry.addEventListener('click', importFromRegistry);
@@ -1104,6 +1121,131 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
+    // --- LÓGICA Y FUNCIONES DEL ESCÁNER DE CÓDIGO QR ---
+
+    async function startCameraScanner() {
+        if (typeof Html5Qrcode === 'undefined') {
+            showToast('Librería no Lista', 'La librería del lector QR aún se está cargando.', 'warning');
+            return;
+        }
+
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("qr-reader");
+        }
+
+        try {
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onQrScanSuccess,
+                onQrScanError
+            );
+            isScannerRunning = true;
+            if (btnStartCamera) btnStartCamera.style.display = 'none';
+            if (btnStopCamera) btnStopCamera.style.display = 'block';
+            showToast('Cámara Activada', 'Escáner QR listo para leer códigos.', 'info');
+        } catch (err) {
+            console.error("Error al iniciar cámara para QR:", err);
+            showToast('Error de Cámara', 'No se pudo acceder a la cámara. Revisa los permisos de tu dispositivo.', 'danger');
+        }
+    }
+
+    async function stopCameraScanner() {
+        if (html5QrCode && isScannerRunning) {
+            try {
+                await html5QrCode.stop();
+                isScannerRunning = false;
+                if (btnStartCamera) btnStartCamera.style.display = 'block';
+                if (btnStopCamera) btnStopCamera.style.display = 'none';
+            } catch (err) {
+                console.error("Error al detener cámara:", err);
+            }
+        }
+    }
+
+    function onQrScanError(errorMessage) {
+        // Silenciar errores continuos de búsqueda de frame sin QR
+    }
+
+    async function handleQrFileUpload(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (typeof Html5Qrcode === 'undefined') {
+            showToast('Librería no Lista', 'La librería del lector QR aún no está lista.', 'warning');
+            return;
+        }
+
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("qr-reader");
+        }
+
+        try {
+            const decodedText = await html5QrCode.scanFile(file, true);
+            onQrScanSuccess(decodedText);
+        } catch (err) {
+            console.error("Error al decodificar imagen QR:", err);
+            showToast('Lectura Fallida', 'No se detectó un código QR válido en la imagen seleccionada.', 'warning');
+        }
+        qrInputFile.value = '';
+    }
+
+    function onQrScanSuccess(decodedText) {
+        if (!decodedText) return;
+
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const resultTimeEl = document.getElementById('qr-result-time');
+        if (resultTimeEl) {
+            resultTimeEl.innerHTML = `<i class="fa-regular fa-clock"></i> Leído a las ${timeStr}`;
+        }
+
+        let parsed = null;
+        try {
+            parsed = JSON.parse(decodedText);
+        } catch (e) {
+            parsed = null;
+        }
+
+        if (qrScanEmptyState) qrScanEmptyState.style.display = 'none';
+        if (qrScanResultCard) qrScanResultCard.style.display = 'block';
+
+        const badge = document.getElementById('qr-result-badge');
+        const resName = document.getElementById('qr-res-name');
+        const resGroup = document.getElementById('qr-res-group');
+        const resId = document.getElementById('qr-res-id');
+        const resEmail = document.getElementById('qr-res-email');
+        const resRaw = document.getElementById('qr-res-raw');
+
+        if (parsed && (parsed.nombre || parsed.id)) {
+            if (badge) {
+                badge.className = 'result-badge success';
+                badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> Alumno CBTis Decodificado';
+            }
+            if (resName) resName.textContent = parsed.nombre || 'Nombre no especificado';
+            if (resGroup) resGroup.innerHTML = `<i class="fa-solid fa-users-rectangle text-accent"></i> ${parsed.grupo || 'Sin grupo'}`;
+            if (resId) resId.textContent = parsed.id || 'N/A';
+            if (resEmail) resEmail.textContent = parsed.email || 'Sin correo';
+            if (resRaw) resRaw.textContent = decodedText;
+
+            showToast('QR Leído con Éxito', `Alumno: ${parsed.nombre || 'Desconocido'} (${parsed.grupo || ''})`, 'success');
+        } else {
+            if (badge) {
+                badge.className = 'result-badge warning';
+                badge.innerHTML = '<i class="fa-solid fa-circle-info"></i> Código QR Estándar / Texto';
+            }
+            if (resName) resName.textContent = 'Contenido QR de Texto / URL';
+            if (resGroup) resGroup.innerHTML = `<i class="fa-solid fa-users-rectangle text-accent"></i> N/A`;
+            if (resId) resId.textContent = 'N/A';
+            if (resEmail) resEmail.textContent = 'N/A';
+            if (resRaw) resRaw.textContent = decodedText;
+
+            showToast('QR Decodificado', 'Se leyó el contenido del código QR.', 'info');
+        }
+    }
+
+
     // --- SISTEMA DE TOAST NOTIFICATIONS ---
     function showToast(title, message, type = 'info') {
         const toast = document.createElement('div');
@@ -1184,7 +1326,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- FUNCIONES Y LÓGICA DE ASISTENCIA ---
+    // --- FUNCIONES Y LÓGICA DE ASISTENCIA Y PESTAÑAS ---
 
     function setupTabs() {
         tabButtons.forEach(btn => {
@@ -1192,13 +1334,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 tabButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 const targetTab = btn.getAttribute('data-tab');
+
+                viewRegistro.style.display = 'none';
+                viewAsistencia.style.display = 'none';
+                if (viewEscaneo) viewEscaneo.style.display = 'none';
+
                 if (targetTab === 'registro') {
                     viewRegistro.style.display = 'grid';
-                    viewAsistencia.style.display = 'none';
-                } else {
-                    viewRegistro.style.display = 'none';
+                    stopCameraScanner();
+                } else if (targetTab === 'asistencia') {
                     viewAsistencia.style.display = 'grid';
                     renderAttendance();
+                    stopCameraScanner();
+                } else if (targetTab === 'escaneo') {
+                    if (viewEscaneo) viewEscaneo.style.display = 'grid';
                 }
             });
         });
