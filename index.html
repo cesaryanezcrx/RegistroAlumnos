@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro de Alumnos - CBTis</title>
+    <title>Registro de Alumnos - Cesar</title>
     <!-- Google Fonts: Outfit & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -193,7 +193,7 @@
                     <i class="fa-solid fa-gears card-icon"></i>
                     <h2>Controles y Resumen</h2>
                 </div>
-                
+
                 <!-- Date Selector -->
                 <div class="input-group" style="margin-bottom: 1.2rem;">
                     <label for="attendance-date">
@@ -203,14 +203,16 @@
                 </div>
 
                 <!-- CSV / Student Load Controls -->
-                <div class="form-actions" style="display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.2rem;">
+                <div class="form-actions"
+                    style="display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.2rem;">
                     <button type="button" class="btn btn-secondary" id="btn-import-from-registry" style="width: 100%;">
                         <i class="fa-solid fa-users"></i> Importar de Alumnos
                     </button>
-                    
+
                     <div class="csv-upload-wrapper" style="position: relative; width: 100%;">
                         <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
-                        <button type="button" class="btn btn-secondary" id="btn-upload-csv-trigger" style="width: 100%;">
+                        <button type="button" class="btn btn-secondary" id="btn-upload-csv-trigger"
+                            style="width: 100%;">
                             <i class="fa-solid fa-file-import"></i> Cargar Alumnos CSV
                         </button>
                     </div>
@@ -224,10 +226,12 @@
                     <h3 style="font-size: 1.1rem; font-family: var(--font-heading);">Respaldo del Semestre</h3>
                 </div>
                 <div class="form-actions" style="display: flex; gap: 0.8rem; margin-bottom: 1.5rem;">
-                    <button type="button" class="btn btn-primary" id="btn-export-history" style="flex: 1; font-size: 0.85rem;" title="Exportar todo el historial del semestre">
+                    <button type="button" class="btn btn-primary" id="btn-export-history"
+                        style="flex: 1; font-size: 0.85rem;" title="Exportar todo el historial del semestre">
                         <i class="fa-solid fa-download"></i> Exportar
                     </button>
-                    <button type="button" class="btn btn-secondary" id="btn-import-history-trigger" style="flex: 1; font-size: 0.85rem;" title="Importar historial de asistencia">
+                    <button type="button" class="btn btn-secondary" id="btn-import-history-trigger"
+                        style="flex: 1; font-size: 0.85rem;" title="Importar historial de asistencia">
                         <i class="fa-solid fa-upload"></i> Importar
                     </button>
                     <input type="file" id="import-history-file" accept=".json" style="display: none;">
@@ -237,7 +241,8 @@
 
                 <!-- Attendance Stats Summary -->
                 <div class="attendance-summary" style="margin-top: 1.2rem;">
-                    <h3 style="font-size: 1.1rem; font-family: var(--font-heading); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <h3
+                        style="font-size: 1.1rem; font-family: var(--font-heading); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
                         <i class="fa-solid fa-chart-pie text-accent"></i> Resumen del Día
                     </h3>
                     <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem;">
@@ -254,9 +259,11 @@
                             <span class="mini-stat-value text-danger" id="att-stat-absent">0</span>
                         </div>
                     </div>
-                    <div class="mini-stat-card" style="margin-top: 0.8rem; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 0.8rem 1.2rem;">
+                    <div class="mini-stat-card"
+                        style="margin-top: 0.8rem; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 0.8rem 1.2rem;">
                         <span class="mini-stat-label" style="margin-bottom: 0;">% Asistencia</span>
-                        <span class="mini-stat-value" id="att-stat-percent" style="font-size: 1.5rem; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0%</span>
+                        <span class="mini-stat-value" id="att-stat-percent"
+                            style="font-size: 1.5rem; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0%</span>
                     </div>
                 </div>
             </section>
@@ -266,12 +273,15 @@
                 <div class="records-toolbar">
                     <div class="search-bar">
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="attendance-search-input" placeholder="Buscar alumnos en asistencia..." aria-label="Buscar alumnos">
-                        <button id="attendance-clear-search" class="btn-clear" aria-label="Limpiar búsqueda" style="display: none;">
+                        <input type="text" id="attendance-search-input" placeholder="Buscar alumnos en asistencia..."
+                            aria-label="Buscar alumnos">
+                        <button id="attendance-clear-search" class="btn-clear" aria-label="Limpiar búsqueda"
+                            style="display: none;">
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
-                    <span id="autosave-status" style="font-size: 0.8rem; color: var(--success); font-weight: 500; display: flex; align-items: center; gap: 0.4rem;">
+                    <span id="autosave-status"
+                        style="font-size: 0.8rem; color: var(--success); font-weight: 500; display: flex; align-items: center; gap: 0.4rem;">
                         <i class="fa-solid fa-circle-check animate-pulse"></i> Auto-guardado activo
                     </span>
                 </div>
@@ -297,7 +307,8 @@
                             <i class="fa-solid fa-clipboard-user"></i>
                         </div>
                         <h3>No hay alumnos cargados</h3>
-                        <p>Carga un archivo CSV o importa los alumnos registrados en la primera pestaña para iniciar el pase de lista.</p>
+                        <p>Carga un archivo CSV o importa los alumnos registrados en la primera pestaña para iniciar el
+                            pase de lista.</p>
                     </div>
 
                     <!-- Attendance No Results State -->
@@ -408,7 +419,8 @@
                 <div class="qr-code-wrapper">
                     <div id="qr-code-container"></div>
                 </div>
-                <p class="qr-hint"><i class="fa-solid fa-circle-info"></i> Código QR listo para escaneo y verificación de información.</p>
+                <p class="qr-hint"><i class="fa-solid fa-circle-info"></i> Código QR listo para escaneo y verificación
+                    de información.</p>
             </div>
         </div>
     </div>
