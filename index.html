@@ -4,17 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CBTis 111 - Asistencia Inteligente QR</title>
-    <!-- Google Fonts: Outfit (headings) & Inter (body) -->
+    <title>Registro de Alumnos - Cesar Yañez</title>
+    <!-- Google Fonts: Outfit & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Custom CSS -->
+    <!-- QRCode.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Custom Style -->
     <link rel="stylesheet" href="style.css">
-    <!-- html5-qrcode CDN -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 
 <body>
@@ -27,336 +29,403 @@
         <!-- Header -->
         <header class="app-header">
             <div class="header-logo">
-                <i class="fa-solid fa-qrcode header-icon animate-pulse"></i>
+                <i class="fa-solid fa-graduation-cap header-icon animate-pulse"></i>
                 <div class="header-text">
                     <h1>CBTis 111</h1>
-                    <p>Sistema Inteligente de Control de Asistencia QR</p>
+                    <p>Sistema de Control y Registro de Alumnos</p>
                 </div>
             </div>
-            
-            <!-- Quick Config Box inside Header -->
-            <div class="header-config card-glass">
-                <div class="config-item">
-                    <label for="cfg-group"><i class="fa-solid fa-users"></i> Grupo</label>
-                    <input type="text" id="cfg-group" value="4º A" placeholder="Ej. 4º A" autocomplete="off">
+            <div class="header-stats">
+                <div class="stat-card" id="stat-total">
+                    <span class="stat-label">Total Alumnos</span>
+                    <span class="stat-value" id="total-count">0</span>
                 </div>
-                <div class="config-item">
-                    <label for="cfg-start-time"><i class="fa-solid fa-clock"></i> Inicio Clase</label>
-                    <input type="time" id="cfg-start-time" value="08:00">
-                </div>
-                <div class="config-item">
-                    <label for="cfg-tolerance"><i class="fa-solid fa-hourglass-half"></i> Tolerancia</label>
-                    <div class="input-suffix-wrapper">
-                        <input type="number" id="cfg-tolerance" value="10" min="0" max="60">
-                        <span>min</span>
-                    </div>
-                </div>
-                <div class="config-date">
-                    <span class="date-label">Fecha del Día</span>
-                    <span id="current-date-span" class="date-value">--/--/----</span>
+                <div class="stat-card date-card">
+                    <span class="stat-label">Fecha</span>
+                    <span class="stat-value" id="current-date">--/--/----</span>
                 </div>
             </div>
         </header>
 
-        <!-- Dashboard Layout -->
-        <main class="dashboard-grid">
-            
-            <!-- LEFT PANEL: Capture & Scanner Controls -->
-            <section class="left-panel">
-                
-                <!-- QR Camera Scanner Card -->
-                <div class="card-glass qr-scanner-card" id="scanner-container-card">
-                    <div class="card-header-compact">
-                        <div class="title-with-status">
-                            <i class="fa-solid fa-camera card-icon-sm"></i>
-                            <h3>Escáner de Cámara QR</h3>
-                        </div>
-                        <span id="scanner-badge" class="badge badge-error"><i class="fa-solid fa-circle"></i> Inactivo</span>
+        <!-- Tabs Navigation -->
+        <nav class="app-tabs">
+            <button class="tab-btn active" id="tab-btn-registro" data-tab="registro">
+                <i class="fa-solid fa-user-plus"></i> Registro de Alumnos
+            </button>
+            <button class="tab-btn" id="tab-btn-asistencia" data-tab="asistencia" style="display: none;">
+                <i class="fa-solid fa-calendar-check"></i> Control de Asistencia
+            </button>
+        </nav>
+
+        <!-- View 1: Registro de Alumnos Workspace -->
+        <main class="app-workspace tab-content" id="view-registro">
+            <!-- Left Side: Registration Form -->
+            <section class="workspace-form card">
+                <div class="card-header">
+                    <i class="fa-solid fa-user-plus card-icon"></i>
+                    <h2>Registrar Nuevo Alumno</h2>
+                </div>
+                <form id="registration-form" novalidate autocomplete="off">
+                    <!-- Grupo Escolar -->
+                    <div class="input-group group-field-container">
+                        <label for="group-input">
+                            <i class="fa-solid fa-users-rectangle input-icon"></i> Grupo de Alumnos
+                        </label>
+                        <input type="text" id="group-input" placeholder="Ej. 4º A" required aria-required="true">
+                        <span class="error-message">Este campo es requerido.</span>
                     </div>
-                    
-                    <!-- Scanner camera controls -->
-                    <div class="scanner-controls">
-                        <div class="select-wrapper">
-                            <i class="fa-solid fa-video select-icon"></i>
-                            <select id="camera-select" aria-label="Seleccionar Cámara">
-                                <option value="">Cargando cámaras...</option>
-                            </select>
-                        </div>
-                        <button id="btn-toggle-scanner" class="btn btn-primary btn-sm">
-                            <i class="fa-solid fa-play"></i> Iniciar Cámara
+
+                    <div class="form-divider"></div>
+
+                    <!-- Apellido Paterno -->
+                    <div class="input-group">
+                        <label for="paternal-last-name">
+                            <i class="fa-solid fa-signature input-icon"></i> Apellido Paterno
+                        </label>
+                        <input type="text" id="paternal-last-name" placeholder="Ej. Yáñez" required
+                            aria-required="true">
+                        <span class="error-message">Este campo es requerido.</span>
+                    </div>
+
+                    <!-- Apellido Materno -->
+                    <div class="input-group">
+                        <label for="maternal-last-name">
+                            <i class="fa-solid fa-signature input-icon"></i> Apellido Materno
+                        </label>
+                        <input type="text" id="maternal-last-name" placeholder="Ej. Cruz" required aria-required="true">
+                        <span class="error-message">Este campo es requerido.</span>
+                    </div>
+
+                    <!-- Nombre -->
+                    <div class="input-group">
+                        <label for="first-name">
+                            <i class="fa-solid fa-user input-icon"></i> Nombre(s)
+                        </label>
+                        <input type="text" id="first-name" placeholder="Ej. César" required aria-required="true">
+                        <span class="error-message">Este campo es requerido.</span>
+                    </div>
+
+                    <!-- Correo Electrónico -->
+                    <div class="input-group">
+                        <label for="email-input">
+                            <i class="fa-solid fa-envelope input-icon"></i> Correo Electrónico
+                        </label>
+                        <input type="email" id="email-input" placeholder="Ej. cesar@example.com" required
+                            aria-required="true">
+                        <span class="error-message">Este campo es requerido.</span>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="form-actions" style="display: flex; gap: 0.8rem; margin-top: 0.5rem;">
+                        <button type="submit" class="btn btn-primary" id="btn-submit" style="flex: 2;">
+                            <i class="fa-solid fa-circle-check button-icon"></i> Registrar Alumno
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="btn-clear-table" style="flex: 1;"
+                            title="Limpiar todos los registros en pantalla para iniciar un nuevo grupo">
+                            <i class="fa-solid fa-broom"></i> Limpiar
                         </button>
                     </div>
-
-                    <!-- Viewport for camera stream -->
-                    <div class="reader-container">
-                        <div id="reader"></div>
-                        <div class="scan-overlay" id="scan-overlay">
-                            <div class="scan-corner top-left"></div>
-                            <div class="scan-corner top-right"></div>
-                            <div class="scan-corner bottom-left"></div>
-                            <div class="scan-corner bottom-right"></div>
-                            <div class="scan-laser"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Alternative USB / Keyboard Input Card -->
-                <div class="card-glass usb-scanner-card" id="usb-container-card">
-                    <div class="card-header-compact">
-                        <div class="title-with-status">
-                            <i class="fa-solid fa-keyboard card-icon-sm"></i>
-                            <h3>Lectora USB / Entrada Manual</h3>
-                        </div>
-                        <span id="usb-focus-badge" class="badge badge-success animate-pulse"><i class="fa-solid fa-circle"></i> Listo</span>
-                    </div>
-                    <p class="card-description">El sistema captura códigos automáticamente. Si usas lector USB o teclado, asegúrate de mantener el foco aquí.</p>
-                    <div class="input-focus-wrapper">
-                        <input type="text" id="usb-input" placeholder="Esperando escaneo o ingresa ID + Enter..." autocomplete="off">
-                        <button id="btn-manual-submit" class="btn btn-secondary btn-icon-only" title="Registrar código manualmente">
-                            <i class="fa-solid fa-right-to-bracket"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Last Scanned Result Board -->
-                <div class="card-glass result-card" id="last-result-card">
-                    <div class="card-header-compact">
-                        <h3>Último Registro</h3>
-                        <i class="fa-solid fa-history text-muted"></i>
-                    </div>
-                    <div class="result-display" id="result-display-area">
-                        <div class="result-placeholder">
-                            <i class="fa-solid fa-barcode-read animate-bounce"></i>
-                            <p>Esperando escaneo QR o entrada...</p>
-                        </div>
-                    </div>
-                </div>
-
+                </form>
             </section>
 
-            <!-- RIGHT PANEL: Stats & Detailed Tables -->
-            <section class="right-panel">
-                
-                <!-- Metrics Grid -->
-                <div class="metrics-grid">
-                    <div class="metric-card card-glass" id="metric-total">
-                        <span class="metric-label">Matrícula Total</span>
-                        <span class="metric-value" id="metric-val-total">0</span>
-                        <div class="metric-subtext">Alumnos registrados</div>
+            <!-- Right Side: Records Table -->
+            <section class="workspace-records card">
+                <div class="records-toolbar">
+                    <div class="search-bar">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="search-input" placeholder="Buscar por nombre o apellidos..."
+                            aria-label="Buscar alumnos">
+                        <button id="clear-search" class="btn-clear" aria-label="Limpiar búsqueda"
+                            style="display: none;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
                     </div>
-                    <div class="metric-card card-glass" id="metric-present">
-                        <span class="metric-label">Asistencias</span>
-                        <span class="metric-value text-success" id="metric-val-present">0</span>
-                        <div class="metric-subtext">A tiempo</div>
-                    </div>
-                    <div class="metric-card card-glass" id="metric-late">
-                        <span class="metric-label">Retardos</span>
-                        <span class="metric-value text-warning" id="metric-val-late">0</span>
-                        <div class="metric-subtext">Fuera de tiempo</div>
-                    </div>
-                    <div class="metric-card card-glass" id="metric-absent">
-                        <span class="metric-label">Faltas</span>
-                        <span class="metric-value text-danger" id="metric-val-absent">0</span>
-                        <div class="metric-subtext">Alumnos ausentes</div>
-                    </div>
-                    <div class="metric-card card-glass accent-metric" id="metric-percent">
-                        <span class="metric-label">% Asistencia</span>
-                        <span class="metric-value" id="metric-val-percent">0%</span>
-                        <div class="metric-subtext">Rendimiento grupal</div>
-                    </div>
+                    <button id="btn-export-csv" class="btn btn-success" disabled>
+                        <i class="fa-solid fa-file-csv button-icon"></i> Exportar CSV
+                    </button>
                 </div>
 
-                <!-- Interactive Tabs Container -->
-                <div class="card-glass tabs-card">
-                    <!-- Navigation Tabs -->
-                    <nav class="tabs-nav">
-                        <button class="tab-link active" data-tab="tab-asistencia">
-                            <i class="fa-solid fa-clipboard-list"></i> Pase de Lista
-                        </button>
-                        <button class="tab-link" data-tab="tab-catalogo">
-                            <i class="fa-solid fa-address-book"></i> Catálogo de Alumnos
-                        </button>
-                    </nav>
+                <!-- Table Container -->
+                <div class="table-container">
+                    <table class="students-table" id="students-table">
+                        <thead>
+                            <tr>
+                                <th class="col-num">#</th>
+                                <th>Apellido Paterno</th>
+                                <th>Apellido Materno</th>
+                                <th>Nombre(s)</th>
+                                <th>Correo Electrónico</th>
+                                <th class="col-actions">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="students-table-body">
+                            <!-- Rows will be injected dynamically by JS -->
+                        </tbody>
+                    </table>
 
-                    <!-- Tab 1: Attendance Table -->
-                    <div class="tab-content active" id="tab-asistencia">
-                        <div class="toolbar-actions">
-                            <div class="search-bar">
-                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                                <input type="text" id="search-attendance" placeholder="Buscar alumno por nombre o ID...">
-                            </div>
-                            <div class="toolbar-buttons">
-                                <button id="btn-export-csv" class="btn btn-success">
-                                    <i class="fa-solid fa-file-csv"></i> Exportar Reporte
-                                </button>
-                                <button id="btn-reset-attendance" class="btn btn-secondary">
-                                    <i class="fa-solid fa-rotate-left"></i> Reiniciar Día
-                                </button>
-                            </div>
+                    <!-- Empty State -->
+                    <div class="empty-state" id="empty-state-view">
+                        <div class="empty-illustration">
+                            <i class="fa-regular fa-folder-open"></i>
                         </div>
-
-                        <!-- Table Area -->
-                        <div class="table-container">
-                            <table class="data-table" id="attendance-table">
-                                <thead>
-                                    <tr>
-                                        <th class="col-num">#</th>
-                                        <th>Matrícula / ID</th>
-                                        <th>Alumno</th>
-                                        <th style="width: 140px; text-align: center;">Estatus</th>
-                                        <th style="width: 140px; text-align: center;">Hora Registro</th>
-                                        <th style="width: 120px; text-align: center;">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="attendance-table-body">
-                                    <!-- Dynamic rows -->
-                                </tbody>
-                            </table>
-
-                            <!-- Empty table state -->
-                            <div class="table-empty-state" id="attendance-empty" style="display: none;">
-                                <i class="fa-solid fa-calendar-xmark text-muted"></i>
-                                <h4>No hay asistencia registrada hoy</h4>
-                                <p>Carga alumnos e inicia el escaneo para ver los registros aquí.</p>
-                            </div>
-                        </div>
+                        <h3>No hay alumnos registrados</h3>
+                        <p>Completa el formulario de la izquierda para registrar a los primeros estudiantes de este
+                            grupo.</p>
                     </div>
 
-                    <!-- Tab 2: Student Catalog Management -->
-                    <div class="tab-content" id="tab-catalogo">
-                        <div class="catalog-grid">
-                            
-                            <!-- Catalog Left Side: Upload & Manual addition -->
-                            <div class="catalog-actions-panel">
-                                <div class="form-section card-dark">
-                                    <h4><i class="fa-solid fa-file-import"></i> Importar Alumnos</h4>
-                                    <p class="help-text">Sube un archivo CSV con las columnas:<br><strong>ID_Alumno, Apellido Paterno, Apellido Materno, Nombre</strong></p>
-                                    
-                                    <div class="upload-area" id="csv-dropzone">
-                                        <input type="file" id="csv-file-input" accept=".csv">
-                                        <div class="upload-content">
-                                            <i class="fa-solid fa-cloud-arrow-up"></i>
-                                            <span>Arrastra tu archivo CSV aquí o haz clic</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="form-section card-dark">
-                                    <h4><i class="fa-solid fa-user-plus"></i> Agregar Alumno Manual</h4>
-                                    <form id="add-student-form">
-                                        <div class="form-group">
-                                            <label for="stu-id">Matrícula / ID</label>
-                                            <input type="text" id="stu-id" placeholder="Ej. ALU-2026-001" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="stu-paternal">Apellido Paterno</label>
-                                            <input type="text" id="stu-paternal" placeholder="Ej. Yáñez" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="stu-maternal">Apellido Materno</label>
-                                            <input type="text" id="stu-maternal" placeholder="Ej. Cruz" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="stu-name">Nombre(s)</label>
-                                            <input type="text" id="stu-name" placeholder="Ej. César" required>
-                                        </div>
-                                        <div class="form-actions-row">
-                                            <button type="submit" class="btn btn-primary btn-full">
-                                                <i class="fa-solid fa-user-check"></i> Registrar Alumno
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-
-                                <div class="form-section card-dark danger-zone">
-                                    <h4><i class="fa-solid fa-triangle-exclamation"></i> Zona Peligrosa</h4>
-                                    <div class="danger-buttons">
-                                        <button id="btn-restore-samples" class="btn btn-secondary btn-full">
-                                            <i class="fa-solid fa-seedling"></i> Restaurar Alumnos de Ejemplo
-                                        </button>
-                                        <button id="btn-clear-catalog" class="btn btn-danger btn-full">
-                                            <i class="fa-solid fa-trash-can"></i> Vaciar Todo el Catálogo
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Catalog Right Side: View List of Students -->
-                            <div class="catalog-list-panel">
-                                <div class="catalog-header-row">
-                                    <h4>Lista de Catálogo (<span id="catalog-count-badge">0</span>)</h4>
-                                    <div class="search-bar search-bar-compact">
-                                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                                        <input type="text" id="search-catalog" placeholder="Filtrar catálogo...">
-                                    </div>
-                                </div>
-
-                                <div class="catalog-list-wrapper">
-                                    <table class="data-table data-table-compact" id="catalog-table">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Nombre Alumno</th>
-                                                <th style="width: 60px; text-align: center;">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="catalog-table-body">
-                                            <!-- Dynamic catalogue list -->
-                                        </tbody>
-                                    </table>
-                                    <div class="table-empty-state" id="catalog-empty" style="display: none;">
-                                        <i class="fa-solid fa-users-slash text-muted"></i>
-                                        <h4>El catálogo está vacío</h4>
-                                        <p>Agrega alumnos manualmente o sube un archivo CSV.</p>
-                                    </div>
-                                </div>
-                            </div>
+                    <!-- No Results Found State -->
+                    <div class="empty-state" id="no-results-view" style="display: none;">
+                        <div class="empty-illustration">
+                            <i class="fa-solid fa-user-slash"></i>
                         </div>
+                        <h3>Sin resultados</h3>
+                        <p>No se encontraron alumnos que coincidan con la búsqueda.</p>
                     </div>
                 </div>
-
             </section>
         </main>
 
+        <!-- View 2: Control de Asistencia Workspace -->
+        <main class="app-workspace tab-content" id="view-asistencia" style="display: none;">
+            <!-- Left Side: Controls & Summary -->
+            <section class="workspace-form card">
+                <div class="card-header">
+                    <i class="fa-solid fa-gears card-icon"></i>
+                    <h2>Controles y Resumen</h2>
+                </div>
+
+                <!-- Date Selector -->
+                <div class="input-group" style="margin-bottom: 1.2rem;">
+                    <label for="attendance-date">
+                        <i class="fa-solid fa-calendar-days input-icon"></i> Fecha de Asistencia
+                    </label>
+                    <input type="date" id="attendance-date" required>
+                </div>
+
+                <!-- CSV / Student Load Controls -->
+                <div class="form-actions"
+                    style="display: flex; flex-direction: column; gap: 0.8rem; margin-bottom: 1.2rem;">
+                    <button type="button" class="btn btn-secondary" id="btn-import-from-registry" style="width: 100%;">
+                        <i class="fa-solid fa-users"></i> Importar de Alumnos
+                    </button>
+
+                    <div class="csv-upload-wrapper" style="position: relative; width: 100%;">
+                        <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
+                        <button type="button" class="btn btn-secondary" id="btn-upload-csv-trigger"
+                            style="width: 100%;">
+                            <i class="fa-solid fa-file-import"></i> Cargar Alumnos CSV
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-divider"></div>
+
+                <!-- Backup Import/Export Controls -->
+                <div class="card-header" style="margin-top: 1.2rem; margin-bottom: 1rem; padding-bottom: 0.5rem;">
+                    <i class="fa-solid fa-floppy-disk card-icon" style="font-size: 1.1rem;"></i>
+                    <h3 style="font-size: 1.1rem; font-family: var(--font-heading);">Respaldo del Semestre</h3>
+                </div>
+                <div class="form-actions" style="display: flex; gap: 0.8rem; margin-bottom: 1.5rem;">
+                    <button type="button" class="btn btn-primary" id="btn-export-history"
+                        style="flex: 1; font-size: 0.85rem;" title="Exportar todo el historial del semestre">
+                        <i class="fa-solid fa-download"></i> Exportar
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="btn-import-history-trigger"
+                        style="flex: 1; font-size: 0.85rem;" title="Importar historial de asistencia">
+                        <i class="fa-solid fa-upload"></i> Importar
+                    </button>
+                    <input type="file" id="import-history-file" accept=".json" style="display: none;">
+                </div>
+
+                <div class="form-divider"></div>
+
+                <!-- Attendance Stats Summary -->
+                <div class="attendance-summary" style="margin-top: 1.2rem;">
+                    <h3
+                        style="font-size: 1.1rem; font-family: var(--font-heading); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fa-solid fa-chart-pie text-accent"></i> Resumen del Día
+                    </h3>
+                    <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem;">
+                        <div class="mini-stat-card">
+                            <span class="mini-stat-label">Total</span>
+                            <span class="mini-stat-value" id="att-stat-total">0</span>
+                        </div>
+                        <div class="mini-stat-card">
+                            <span class="mini-stat-label">Presentes</span>
+                            <span class="mini-stat-value text-success" id="att-stat-present">0</span>
+                        </div>
+                        <div class="mini-stat-card">
+                            <span class="mini-stat-label">Ausentes</span>
+                            <span class="mini-stat-value text-danger" id="att-stat-absent">0</span>
+                        </div>
+                    </div>
+                    <div class="mini-stat-card"
+                        style="margin-top: 0.8rem; display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 0.8rem 1.2rem;">
+                        <span class="mini-stat-label" style="margin-bottom: 0;">% Asistencia</span>
+                        <span class="mini-stat-value" id="att-stat-percent"
+                            style="font-size: 1.5rem; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">0%</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Side: Attendance Table -->
+            <section class="workspace-records card">
+                <div class="records-toolbar">
+                    <div class="search-bar">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="attendance-search-input" placeholder="Buscar alumnos en asistencia..."
+                            aria-label="Buscar alumnos">
+                        <button id="attendance-clear-search" class="btn-clear" aria-label="Limpiar búsqueda"
+                            style="display: none;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <span id="autosave-status"
+                        style="font-size: 0.8rem; color: var(--success); font-weight: 500; display: flex; align-items: center; gap: 0.4rem;">
+                        <i class="fa-solid fa-circle-check animate-pulse"></i> Auto-guardado activo
+                    </span>
+                </div>
+
+                <!-- Attendance Table Container -->
+                <div class="table-container">
+                    <table class="students-table" id="attendance-table">
+                        <thead>
+                            <tr>
+                                <th class="col-num">#</th>
+                                <th>Alumno</th>
+                                <th style="text-align: center; width: 220px;">Asistencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-table-body">
+                            <!-- Rows will be injected dynamically by JS -->
+                        </tbody>
+                    </table>
+
+                    <!-- Attendance Empty State -->
+                    <div class="empty-state" id="attendance-empty-state-view">
+                        <div class="empty-illustration">
+                            <i class="fa-solid fa-clipboard-user"></i>
+                        </div>
+                        <h3>No hay alumnos cargados</h3>
+                        <p>Carga un archivo CSV o importa los alumnos registrados en la primera pestaña para iniciar el
+                            pase de lista.</p>
+                    </div>
+
+                    <!-- Attendance No Results State -->
+                    <div class="empty-state" id="attendance-no-results-view" style="display: none;">
+                        <div class="empty-illustration">
+                            <i class="fa-solid fa-user-slash"></i>
+                        </div>
+                        <h3>Sin resultados</h3>
+                        <p>No se encontraron alumnos que coincidan con la búsqueda.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+
+
         <!-- Footer -->
         <footer class="app-footer">
-            <p>&copy; 2026 CBTis 111. Registro Asistencia QR &bull; Diseñado con Frontend Premium</p>
+            <p>&copy; 2026 CBTis 111 Registro Escolar. Diseñado por César Yáñez </p>
         </footer>
     </div>
 
-    <!-- Notification Toast Container -->
+    <!-- Notification Container (Toasts) -->
     <div class="toast-container" id="toast-container"></div>
 
-    <!-- Manual Edit Modal -->
-    <div class="modal-overlay" id="edit-modal" role="dialog" aria-modal="true" aria-hidden="true">
+    <!-- Custom Modal Dialog (Edit & Confirm Delete) -->
+    <div class="modal-overlay" id="custom-modal" role="dialog" aria-modal="true" aria-hidden="true">
         <div class="modal-card">
             <button class="modal-close" id="modal-close-btn" aria-label="Cerrar modal">
                 <i class="fa-solid fa-xmark"></i>
             </button>
             <div class="modal-header">
-                <i class="fa-solid fa-user-edit modal-header-icon"></i>
-                <h3>Editar Asistencia</h3>
+                <i class="fa-solid fa-user-pen modal-header-icon" id="modal-icon"></i>
+                <h3 id="modal-title">Editar Alumno</h3>
             </div>
-            <div class="modal-body">
-                <p>Estudiante: <strong id="modal-student-name" class="text-primary">Juan Perez</strong></p>
-                <p>ID Alumno: <strong id="modal-student-id">ALU-123</strong></p>
-                <div class="form-group" style="margin-top: 1.2rem;">
-                    <label for="modal-status-select">Cambiar Estatus</label>
-                    <select id="modal-status-select" style="width:100%; padding:0.8rem; border-radius:8px; background:rgba(0,0,0,0.3); color:#fff; border:1px solid rgba(255,255,255,0.15)">
-                        <option value="present">Asistencia (Presente)</option>
-                        <option value="late">Retardo (Tardanza)</option>
-                        <option value="absent">Falta (Ausente)</option>
-                    </select>
-                </div>
+            <div class="modal-body" id="modal-body-content">
+                <!-- Form edit template inside JS -->
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="modal-cancel-btn">Cancelar</button>
-                <button class="btn btn-primary" id="modal-save-btn">Guardar</button>
+                <button class="btn btn-primary" id="modal-confirm-btn">Guardar Cambios</button>
             </div>
         </div>
     </div>
 
-    <!-- JS Logic -->
+    <!-- Custom Confirm Delete Modal -->
+    <div class="modal-overlay" id="confirm-delete-modal" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="modal-card modal-card-danger">
+            <button class="modal-close" id="delete-modal-close-btn" aria-label="Cerrar modal">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="modal-header">
+                <i class="fa-solid fa-triangle-exclamation modal-header-icon text-danger"></i>
+                <h3>¿Confirmar Eliminación?</h3>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar al alumno <strong id="delete-student-name"></strong> de la
+                    lista? Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="delete-modal-cancel-btn">Cancelar</button>
+                <button class="btn btn-danger" id="delete-modal-confirm-btn">Sí, Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirm Clear Modal -->
+    <div class="modal-overlay" id="confirm-clear-modal" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="modal-card modal-card-danger">
+            <button class="modal-close" id="clear-modal-close-btn" aria-label="Cerrar modal">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="modal-header">
+                <i class="fa-solid fa-broom modal-header-icon text-danger"></i>
+                <h3>¿Limpiar Registros?</h3>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas vaciar los alumnos de la pantalla para iniciar un nuevo grupo?</p>
+                <p style="margin-top: 10px; font-weight: 600; color: var(--text-primary);">Asegúrate de haber exportado
+                    tus datos actuales a un archivo CSV antes de limpiar, ya que esta acción borrará la lista en
+                    pantalla.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="clear-modal-cancel-btn">Cancelar</button>
+                <button class="btn btn-danger" id="clear-modal-confirm-btn">Sí, Limpiar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Código QR -->
+    <div class="modal-overlay" id="qr-modal" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="modal-card modal-card-qr">
+            <button class="modal-close" id="qr-modal-close-btn" aria-label="Cerrar modal">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="modal-header">
+                <i class="fa-solid fa-qrcode modal-header-icon text-accent"></i>
+                <h3>Código QR del Alumno</h3>
+            </div>
+            <div class="modal-body qr-modal-body">
+                <div class="qr-student-info">
+                    <h4 id="qr-student-name">Nombre del Alumno</h4>
+                    <div class="qr-student-meta">
+                        <span id="qr-student-group"><i class="fa-solid fa-users-rectangle"></i> Grupo: -</span>
+                        <span id="qr-student-email"><i class="fa-solid fa-envelope"></i> Correo: -</span>
+                    </div>
+                </div>
+                <div class="qr-code-wrapper">
+                    <div id="qr-code-container"></div>
+                </div>
+                <p class="qr-hint"><i class="fa-solid fa-circle-info"></i> Código QR listo para escaneo y verificación
+                    de información.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logic JS -->
     <script src="app.js"></script>
 </body>
 

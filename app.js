@@ -1,1012 +1,1157 @@
 /**
  * ==========================================================================
- * LÓGICA DEL SISTEMA - ASISTENCIA QR Y LECTOR USB (CBTis 111)
- * Desarrollador Frontend Senior - Código Vanilla ES6+ Limpio y Modular
+ * LÓGICA DE NEGOCIO - REGISTRO DE ALUMNOS (CBTis)
+ * Características: LocalStorage persistent, exportación CSV UTF-8 BOM,
+ * notificaciones Toast custom, modals premium y búsqueda interactiva.
  * ==========================================================================
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- ESTADO GLOBAL DE LA APLICACIÓN ---
-    let catalog = [];
-    let attendance = {}; // Estructura: { "YYYY-MM-DD": { "ID_ALU": { status: 'present'|'late'|'absent', time: 'HH:MM:SS' } } }
-    let lastScans = {};   // Estructura: { "ID_ALU": timestamp_ms } para duplicados (10 min lockout)
-    
-    // Instancia de html5QrCode
-    let html5QrCode = null;
-    let scannerActive = false;
+    // --- ESTADO DE LA APLICACIÓN ---
+    let students = [];
+    let currentFilter = '';
     let studentToEditId = null;
+    let studentToDeleteId = null;
 
-    // --- ALUMNOS DE EJEMPLO (PRE-CARGADOS) ---
-    const DEFAULT_STUDENTS = [
-        { id: 'ALU-2026-001', paternal: 'Yáñez', maternal: 'Cruz', name: 'César' },
-        { id: 'ALU-2026-002', paternal: 'Pérez', maternal: 'Gómez', name: 'María José' },
-        { id: 'ALU-2026-003', paternal: 'Hernández', maternal: 'Díaz', name: 'Alejandro' },
-        { id: 'ALU-2026-004', paternal: 'López', maternal: 'Martínez', name: 'Sofía' },
-        { id: 'ALU-2026-005', paternal: 'Rodríguez', maternal: 'Sánchez', name: 'Juan Carlos' },
-        { id: 'ALU-2026-006', paternal: 'Ramírez', maternal: 'Torres', name: 'Ana Laura' },
-        { id: 'ALU-2026-007', paternal: 'García', maternal: 'Flores', name: 'Luis Ángel' },
-        { id: 'ALU-2026-008', paternal: 'Vázquez', maternal: 'Reyes', name: 'Diana Laura' },
-        { id: 'ALU-2026-009', paternal: 'Sánchez', maternal: 'Morales', name: 'Roberto' },
-        { id: 'ALU-2026-010', paternal: 'Castillo', maternal: 'Ruiz', name: 'Elena' }
-    ];
+    // --- ESTADO DE ASISTENCIA ---
+    let attendanceStudents = [];
+    let attendanceHistory = {};
+    let attendanceFilter = '';
 
     // --- ELEMENTOS DEL DOM ---
-    // Configuración Rápida
-    const cfgGroup = document.getElementById('cfg-group');
-    const cfgStartTime = document.getElementById('cfg-start-time');
-    const cfgTolerance = document.getElementById('cfg-tolerance');
-    const currentDateSpan = document.getElementById('current-date-span');
+    // Formulario de Registro
+    const registrationForm = document.getElementById('registration-form');
+    const groupInput = document.getElementById('group-input');
+    const paternalInput = document.getElementById('paternal-last-name');
+    const maternalInput = document.getElementById('maternal-last-name');
+    const firstNameInput = document.getElementById('first-name');
+    const emailInput = document.getElementById('email-input');
+    const submitBtn = document.getElementById('btn-submit');
 
-    // Escáner QR
-    const scannerContainerCard = document.getElementById('scanner-container-card');
-    const scannerBadge = document.getElementById('scanner-badge');
-    const cameraSelect = document.getElementById('camera-select');
-    const btnToggleScanner = document.getElementById('btn-toggle-scanner');
-    const scanOverlay = document.getElementById('scan-overlay');
+    // Tabla y Buscador
+    const studentsTable = document.getElementById('students-table');
+    const studentsTableBody = document.getElementById('students-table-body');
+    const searchInput = document.getElementById('search-input');
+    const clearSearchBtn = document.getElementById('clear-search');
+    const exportCsvBtn = document.getElementById('btn-export-csv');
 
-    // Lector USB
-    const usbContainerCard = document.getElementById('usb-container-card');
-    const usbFocusBadge = document.getElementById('usb-focus-badge');
-    const usbInput = document.getElementById('usb-input');
-    const btnManualSubmit = document.getElementById('btn-manual-submit');
+    // Vistas Vacías
+    const emptyStateView = document.getElementById('empty-state-view');
+    const noResultsView = document.getElementById('no-results-view');
 
-    // Último Registro
-    const lastResultCard = document.getElementById('last-result-card');
-    const resultDisplayArea = document.getElementById('result-display-area');
+    // Estadísticas e Info
+    const totalCountSpan = document.getElementById('total-count');
+    const currentDateSpan = document.getElementById('current-date');
 
-    // Métricas
-    const valTotal = document.getElementById('metric-val-total');
-    const valPresent = document.getElementById('metric-val-present');
-    const valLate = document.getElementById('metric-val-late');
-    const valAbsent = document.getElementById('metric-val-absent');
-    const valPercent = document.getElementById('metric-val-percent');
-
-    // Pestañas / Tabs
-    const tabLinks = document.querySelectorAll('.tab-link');
-    const tabContents = document.querySelectorAll('.tab-content');
-
-    // Pestaña Asistencia
-    const searchAttendance = document.getElementById('search-attendance');
-    const btnExportCsv = document.getElementById('btn-export-csv');
-    const btnResetAttendance = document.getElementById('btn-reset-attendance');
-    const attendanceTableBody = document.getElementById('attendance-table-body');
-    const attendanceEmpty = document.getElementById('attendance-empty');
-
-    // Pestaña Catálogo
+    // Elementos de la Pestaña Asistencia
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const viewRegistro = document.getElementById('view-registro');
+    const viewAsistencia = document.getElementById('view-asistencia');
+    
+    const attDateInput = document.getElementById('attendance-date');
+    const btnImportFromRegistry = document.getElementById('btn-import-from-registry');
     const csvFileInput = document.getElementById('csv-file-input');
-    const csvDropzone = document.getElementById('csv-dropzone');
-    const addStudentForm = document.getElementById('add-student-form');
-    const btnRestoreSamples = document.getElementById('btn-restore-samples');
-    const btnClearCatalog = document.getElementById('btn-clear-catalog');
-    const catalogCountBadge = document.getElementById('catalog-count-badge');
-    const searchCatalog = document.getElementById('search-catalog');
-    const catalogTableBody = document.getElementById('catalog-table-body');
-    const catalogEmpty = document.getElementById('catalog-empty');
+    const btnUploadCsvTrigger = document.getElementById('btn-upload-csv-trigger');
+    const btnExportHistory = document.getElementById('btn-export-history');
+    const btnImportHistoryTrigger = document.getElementById('btn-import-history-trigger');
+    const importHistoryFile = document.getElementById('import-history-file');
+    
+    const attSearchInput = document.getElementById('attendance-search-input');
+    const attClearSearchBtn = document.getElementById('attendance-clear-search');
+    const attTable = document.getElementById('attendance-table');
+    const attTableBody = document.getElementById('attendance-table-body');
+    const attEmptyState = document.getElementById('attendance-empty-state-view');
+    const attNoResults = document.getElementById('attendance-no-results-view');
+    
+    const attStatTotal = document.getElementById('att-stat-total');
+    const attStatPresent = document.getElementById('att-stat-present');
+    const attStatAbsent = document.getElementById('att-stat-absent');
+    const attStatPercent = document.getElementById('att-stat-percent');
 
-    // Modales y Toasts
+    // Contenedores Toast
     const toastContainer = document.getElementById('toast-container');
-    const editModal = document.getElementById('edit-modal');
-    const modalStudentName = document.getElementById('modal-student-name');
-    const modalStudentId = document.getElementById('modal-student-id');
-    const modalStatusSelect = document.getElementById('modal-status-select');
-    const modalCloseBtn = document.getElementById('modal-close-btn');
-    const modalCancelBtn = document.getElementById('modal-cancel-btn');
-    const modalSaveBtn = document.getElementById('modal-save-btn');
+
+    // Modales Personalizados
+    const editModal = document.getElementById('custom-modal');
+    const editModalBody = document.getElementById('modal-body-content');
+    const editModalCloseBtn = document.getElementById('modal-close-btn');
+    const editModalCancelBtn = document.getElementById('modal-cancel-btn');
+    const editModalConfirmBtn = document.getElementById('modal-confirm-btn');
+
+    const deleteModal = document.getElementById('confirm-delete-modal');
+    const deleteStudentNameSpan = document.getElementById('delete-student-name');
+    const deleteModalCloseBtn = document.getElementById('delete-modal-close-btn');
+    const deleteModalCancelBtn = document.getElementById('delete-modal-cancel-btn');
+    const deleteModalConfirmBtn = document.getElementById('delete-modal-confirm-btn');
+
+    // Botón Limpiar y su Modal
+    const btnClearTable = document.getElementById('btn-clear-table');
+    const confirmClearModal = document.getElementById('confirm-clear-modal');
+    const clearModalCloseBtn = document.getElementById('clear-modal-close-btn');
+    const clearModalCancelBtn = document.getElementById('clear-modal-cancel-btn');
+    const clearModalConfirmBtn = document.getElementById('clear-modal-confirm-btn');
+
+    // Modal de Código QR
+    let currentQRStudent = null;
+    const qrModal = document.getElementById('qr-modal');
+    const qrStudentName = document.getElementById('qr-student-name');
+    const qrStudentGroup = document.getElementById('qr-student-group');
+    const qrStudentEmail = document.getElementById('qr-student-email');
+    const qrCodeContainer = document.getElementById('qr-code-container');
+    const qrModalCloseBtn = document.getElementById('qr-modal-close-btn');
+    const qrModalDownloadBtn = document.getElementById('qr-modal-download-btn');
+    const qrModalPrintBtn = document.getElementById('qr-modal-print-btn');
+
 
     // --- INICIALIZACIÓN ---
     function init() {
-        // Establecer Fecha Actual en Español
-        const today = new Date();
-        const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
-        currentDateSpan.textContent = today.toLocaleDateString('es-MX', options);
-
-        // Cargar Catálogo desde LocalStorage
-        const savedCatalog = localStorage.getItem('cbtis_qr_catalog');
-        if (savedCatalog) {
+        // Cargar datos desde LocalStorage
+        const savedStudents = localStorage.getItem('cbtis_students');
+        if (savedStudents) {
             try {
-                catalog = JSON.parse(savedCatalog);
+                students = JSON.parse(savedStudents);
+                sortStudents();
             } catch (e) {
-                console.error("Error cargando catálogo:", e);
-                catalog = [...DEFAULT_STUDENTS];
+                console.error("Error al cargar alumnos desde localStorage:", e);
+                students = [];
             }
+        }
+
+        const savedGroup = localStorage.getItem('cbtis_active_group');
+        if (savedGroup) {
+            groupInput.value = savedGroup;
         } else {
-            catalog = [...DEFAULT_STUDENTS];
-            saveCatalogToLocalStorage();
+            groupInput.value = '';
         }
 
-        // Cargar Historial de Asistencias
-        const savedAttendance = localStorage.getItem('cbtis_qr_attendance');
-        if (savedAttendance) {
+        // Cargar asistencia desde LocalStorage
+        const savedAttStudents = localStorage.getItem('cbtis_attendance_students');
+        if (savedAttStudents) {
             try {
-                attendance = JSON.parse(savedAttendance);
+                attendanceStudents = JSON.parse(savedAttStudents);
             } catch (e) {
-                console.error("Error cargando asistencias:", e);
-                attendance = {};
+                console.error("Error al cargar alumnos de asistencia:", e);
+                attendanceStudents = [];
             }
         }
 
-        // Cargar Configuración
-        const savedGroup = localStorage.getItem('cbtis_qr_active_group');
-        if (savedGroup) cfgGroup.value = savedGroup;
-        const savedStartTime = localStorage.getItem('cbtis_qr_start_time');
-        if (savedStartTime) cfgStartTime.value = savedStartTime;
-        const savedTolerance = localStorage.getItem('cbtis_qr_tolerance');
-        if (savedTolerance) cfgTolerance.value = savedTolerance;
+        const savedAttHistory = localStorage.getItem('cbtis_attendance_history');
+        if (savedAttHistory) {
+            try {
+                attendanceHistory = JSON.parse(savedAttHistory);
+            } catch (e) {
+                console.error("Error al cargar historial de asistencia:", e);
+                attendanceHistory = {};
+            }
+        }
 
-        // Configurar Cámaras
-        initCameras();
+        // Fecha de asistencia por defecto a hoy (local)
+        const localToday = new Date();
+        const year = localToday.getFullYear();
+        const month = String(localToday.getMonth() + 1).padStart(2, '0');
+        const day = String(localToday.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${month}-${day}`;
+        if (attDateInput) {
+            attDateInput.value = todayStr;
+        }
 
-        // Configurar Escuchas de Eventos
+        // Establecer fecha actual formateada en español
+        setCurrentDate();
+
+        // Configurar Event Listeners
         setupEventListeners();
 
-        // Asegurar Autofocus en Lector USB
-        focusUSBInput();
-
-        // Renderizar Tablas y Estadísticas Iniciales
+        // Renderizar tablas por primera vez
         render();
-        
-        showToast('¡Sistema Listo!', 'Control de asistencia QR iniciado correctamente.', 'info');
+        renderAttendance();
+
+        showToast(
+            '¡Bienvenido!', 
+            `Sistema iniciado. ${students.length} alumnos registrados.`, 
+            'info'
+        );
     }
 
-    // --- CONFIGURACIÓN DE CÁMARAS (html5-qrcode) ---
-    function initCameras() {
-        Html5Qrcode.getCameras().then(devices => {
-            cameraSelect.innerHTML = '';
-            if (devices && devices.length > 0) {
-                devices.forEach(device => {
-                    const option = document.createElement('option');
-                    option.value = device.id;
-                    option.textContent = device.label || `Cámara ${cameraSelect.childElementCount + 1}`;
-                    cameraSelect.appendChild(option);
-                });
-            } else {
-                cameraSelect.innerHTML = '<option value="">No se detectaron cámaras</option>';
-            }
-        }).catch(err => {
-            console.error("Error al obtener cámaras:", err);
-            cameraSelect.innerHTML = '<option value="">Permiso de cámara denegado</option>';
-        });
+    // --- MANEJO DE FECHA ---
+    function setCurrentDate() {
+        const today = new Date();
+        const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+        // Formato DD/MM/AAAA
+        currentDateSpan.textContent = today.toLocaleDateString('es-MX', options);
     }
+
 
     // --- EVENT LISTENERS ---
     function setupEventListeners() {
-        // Enfoque constante en Lector USB
-        document.body.addEventListener('click', (e) => {
-            // No recuperar enfoque si el usuario está interactuando con inputs/selects del dashboard
-            const ignoredTags = ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'OPTION'];
-            if (ignoredTags.includes(e.target.tagName) || e.target.closest('.modal-card')) {
-                return;
-            }
-            focusUSBInput();
+        // Registro de Alumnos
+        registrationForm.addEventListener('submit', handleRegistrationSubmit);
+
+        // Validación en tiempo real al escribir o perder el foco
+        [paternalInput, maternalInput, firstNameInput, emailInput].forEach(input => {
+            input.addEventListener('input', () => validateField(input));
+            input.addEventListener('blur', () => validateField(input));
         });
 
-        usbInput.addEventListener('focus', () => {
-            usbFocusBadge.innerHTML = '<i class="fa-solid fa-circle"></i> Listo';
-            usbFocusBadge.className = 'badge badge-success animate-pulse';
-            usbContainerCard.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+        groupInput.addEventListener('input', () => {
+            validateField(groupInput);
+            localStorage.setItem('cbtis_active_group', groupInput.value);
+        });
+        groupInput.addEventListener('blur', () => {
+            validateField(groupInput);
+            const capitalized = groupInput.value.toUpperCase().trim();
+            groupInput.value = capitalized;
+            localStorage.setItem('cbtis_active_group', capitalized);
         });
 
-        usbInput.addEventListener('blur', () => {
-            // Cambiar color/estado a Sin Foco para advertir al usuario
-            usbFocusBadge.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Sin Foco';
-            usbFocusBadge.className = 'badge badge-warning';
-            usbContainerCard.style.borderColor = 'rgba(245, 158, 11, 0.3)';
-        });
+        // Barra de Búsqueda
+        searchInput.addEventListener('input', handleSearch);
+        clearSearchBtn.addEventListener('click', handleClearSearch);
 
-        usbInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const code = usbInput.value.trim();
-                if (code) {
-                    processScan(code, 'usb');
-                }
-                usbInput.value = '';
-            }
-        });
+        // Exportación CSV
+        exportCsvBtn.addEventListener('click', exportToCSV);
 
-        btnManualSubmit.addEventListener('click', () => {
-            const code = usbInput.value.trim();
-            if (code) {
-                processScan(code, 'usb');
-            }
-            usbInput.value = '';
-            focusUSBInput();
-        });
+        // Control del Modal de Edición
+        editModalCloseBtn.addEventListener('click', closeEditModal);
+        editModalCancelBtn.addEventListener('click', closeEditModal);
+        editModalConfirmBtn.addEventListener('click', saveStudentEdit);
 
-        // Configuración rápida del Header
-        cfgGroup.addEventListener('input', () => {
-            localStorage.setItem('cbtis_qr_active_group', cfgGroup.value);
-        });
-        cfgStartTime.addEventListener('change', () => {
-            localStorage.setItem('cbtis_qr_start_time', cfgStartTime.value);
-            updateAttendanceStatesBasedOnNewConfig();
-            render();
-        });
-        cfgTolerance.addEventListener('input', () => {
-            localStorage.setItem('cbtis_qr_tolerance', cfgTolerance.value);
-            updateAttendanceStatesBasedOnNewConfig();
-            render();
-        });
+        // Control del Modal de Eliminación
+        deleteModalCloseBtn.addEventListener('click', closeDeleteModal);
+        deleteModalCancelBtn.addEventListener('click', closeDeleteModal);
+        deleteModalConfirmBtn.addEventListener('click', confirmDelete);
 
-        // Toggle del Escáner QR
-        btnToggleScanner.addEventListener('click', toggleScanner);
+        // Control del Modal de Limpieza
+        btnClearTable.addEventListener('click', openClearModal);
+        clearModalCloseBtn.addEventListener('click', closeClearModal);
+        clearModalCancelBtn.addEventListener('click', closeClearModal);
+        clearModalConfirmBtn.addEventListener('click', confirmClearTable);
 
-        // Control de Pestañas
-        tabLinks.forEach(link => {
-            link.addEventListener('click', () => {
-                tabLinks.forEach(l => l.classList.remove('active'));
-                tabContents.forEach(c => c.classList.remove('active'));
-                
-                link.classList.add('active');
-                const targetTab = document.getElementById(link.getAttribute('data-tab'));
-                if (targetTab) targetTab.classList.add('active');
-                
-                focusUSBInput();
-            });
-        });
+        // Control del Modal de QR
+        if (qrModalCloseBtn) qrModalCloseBtn.addEventListener('click', closeQRCodeModal);
+        if (qrModalDownloadBtn) qrModalDownloadBtn.addEventListener('click', downloadQRCode);
+        if (qrModalPrintBtn) qrModalPrintBtn.addEventListener('click', printQRCode);
 
-        // Filtro y Búsqueda en Pase de Lista
-        searchAttendance.addEventListener('input', () => renderAttendanceTable());
-
-        // Exportación y Reinicio de Asistencia
-        btnExportCsv.addEventListener('click', exportAttendanceToCSV);
-        btnResetAttendance.addEventListener('click', resetDailyAttendance);
-
-        // Formulario de Catálogo Manual
-        addStudentForm.addEventListener('submit', handleAddStudentSubmit);
-
-        // Subida de Archivo CSV (Catálogo)
-        csvFileInput.addEventListener('change', handleCSVUpload);
-
-        // Soporte Drag & Drop para el dropzone del CSV
-        ['dragenter', 'dragover'].forEach(eventName => {
-            csvDropzone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                csvDropzone.classList.add('dragover');
-            }, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            csvDropzone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                csvDropzone.classList.remove('dragover');
-            }, false);
-        });
-
-        csvDropzone.addEventListener('drop', (e) => {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            if (files && files.length > 0) {
-                csvFileInput.files = files;
-                handleCSVFile(files[0]);
-            }
-        });
-
-        csvDropzone.addEventListener('click', () => csvFileInput.click());
-
-        // Búsqueda en Catálogo
-        searchCatalog.addEventListener('input', () => renderCatalogTable());
-
-        // Acciones de Zona Peligrosa
-        btnRestoreSamples.addEventListener('click', restoreSampleCatalog);
-        btnClearCatalog.addEventListener('click', clearEntireCatalog);
-
-        // Eventos del Modal
-        modalCloseBtn.addEventListener('click', closeEditModal);
-        modalCancelBtn.addEventListener('click', closeEditModal);
-        modalSaveBtn.addEventListener('click', saveManualStatusChange);
+        // Cerrar modales al hacer clic fuera del card
         window.addEventListener('click', (e) => {
             if (e.target === editModal) closeEditModal();
+            if (e.target === deleteModal) closeDeleteModal();
+            if (e.target === confirmClearModal) closeClearModal();
+            if (e.target === qrModal) closeQRCodeModal();
         });
+
+        // --- EVENT LISTENERS DE ASISTENCIA ---
+        // Pestañas
+        setupTabs();
+
+        // Importación/Carga de alumnos
+        btnImportFromRegistry.addEventListener('click', importFromRegistry);
+        btnUploadCsvTrigger.addEventListener('click', () => csvFileInput.click());
+        csvFileInput.addEventListener('change', handleCSVUpload);
+
+        // Respaldo
+        btnExportHistory.addEventListener('click', exportAttendanceHistory);
+        btnImportHistoryTrigger.addEventListener('click', () => importHistoryFile.click());
+        importHistoryFile.addEventListener('change', handleImportHistory);
+
+        // Búsqueda y fecha
+        attSearchInput.addEventListener('input', handleAttendanceSearch);
+        attClearSearchBtn.addEventListener('click', handleAttendanceClearSearch);
+        attDateInput.addEventListener('change', () => renderAttendance());
     }
 
-    // --- ENFOQUE DEL LECTOR USB ---
-    function focusUSBInput() {
-        // Espera un milisegundo para que no interfiera con otros clics legítimos
-        setTimeout(() => {
-            if (document.activeElement !== usbInput) {
-                usbInput.focus();
+
+    // --- VALIDACIONES DE FORMULARIO ---
+    function validateField(input) {
+        const parent = input.parentElement;
+        const value = input.value.trim();
+        const errorSpan = parent.querySelector('.error-message');
+
+        if (value === '') {
+            parent.classList.remove('success');
+            parent.classList.add('error');
+            if (errorSpan) {
+                errorSpan.textContent = 'Este campo es requerido.';
             }
-        }, 150);
-    }
-
-    // --- RE-EVALUAR ESTATUS DE ASISTENCIA CUANDO CAMBIAN LOS HORARIOS ---
-    function updateAttendanceStatesBasedOnNewConfig() {
-        const todayStr = getTodayDateString();
-        if (!attendance[todayStr]) return;
-
-        Object.keys(attendance[todayStr]).forEach(studentId => {
-            const record = attendance[todayStr][studentId];
-            if (record.status !== 'absent') {
-                const assigned = evaluateStatus(record.time);
-                record.status = assigned;
-            }
-        });
-        saveAttendanceToLocalStorage();
-    }
-
-    // --- CONTROL DEL QR SCANNER (INICIAR / DETENER) ---
-    function toggleScanner() {
-        if (scannerActive) {
-            stopScanner();
-        } else {
-            startScanner();
+            return false;
         }
+
+        // Validación específica para correo electrónico
+        if (input.type === 'email' || input.id === 'email-input' || input.id === 'edit-email') {
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailRegex.test(value)) {
+                parent.classList.remove('success');
+                parent.classList.add('error');
+                if (errorSpan) {
+                    errorSpan.textContent = 'Introduce un formato de correo válido.';
+                }
+                return false;
+            }
+        }
+
+        parent.classList.remove('error');
+        parent.classList.add('success');
+        return true;
     }
 
-    function startScanner() {
-        const cameraId = cameraSelect.value;
-        if (!cameraId) {
-            showToast('Cámara No Seleccionada', 'Por favor selecciona un dispositivo de cámara válido.', 'warning');
+    function validateForm() {
+        const isGroupValid = validateField(groupInput);
+        const isPaternalValid = validateField(paternalInput);
+        const isMaternalValid = validateField(maternalInput);
+        const isNameValid = validateField(firstNameInput);
+        const isEmailValid = validateField(emailInput);
+
+        return isGroupValid && isPaternalValid && isMaternalValid && isNameValid && isEmailValid;
+    }
+
+    function clearFormValidationStyles() {
+        [paternalInput, maternalInput, firstNameInput, emailInput].forEach(input => {
+            const parent = input.parentElement;
+            parent.classList.remove('success', 'error');
+        });
+    }
+
+
+    // --- OPERACIONES CRUD ---
+
+    // 1. Crear Alumno
+    function handleRegistrationSubmit(e) {
+        e.preventDefault();
+
+        // Validar campos
+        if (!validateForm()) {
+            showToast('Formulario Incompleto', 'Por favor, llena todos los campos obligatorios.', 'warning');
             return;
         }
 
-        scannerContainerCard.classList.remove('flash-success', 'flash-warning', 'flash-error');
-        
-        html5QrCode = new Html5Qrcode("reader");
-        const config = {
-            fps: 15,
-            qrbox: (width, height) => {
-                const size = Math.min(width, height) * 0.7;
-                return { width: size, height: size };
-            }
+        // Obtener y formatear datos (Capitalización de nombres)
+        const group = groupInput.value.toUpperCase().trim();
+        const paternal = capitalizeText(paternalInput.value);
+        const maternal = capitalizeText(maternalInput.value);
+        const firstName = capitalizeText(firstNameInput.value);
+        const email = emailInput.value.trim().toLowerCase();
+
+        // Verificar si ya existe un alumno con el mismo nombre y apellidos
+        const isDuplicate = students.some(student => 
+            student.firstName.toLowerCase().trim() === firstName.toLowerCase().trim() &&
+            student.paternalLastName.toLowerCase().trim() === paternal.toLowerCase().trim() &&
+            student.maternalLastName.toLowerCase().trim() === maternal.toLowerCase().trim()
+        );
+
+        if (isDuplicate) {
+            showToast(
+                'Registro Duplicado', 
+                `El alumno "${firstName} ${paternal} ${maternal}" ya se encuentra registrado.`, 
+                'warning'
+            );
+            return;
+        }
+
+        // Generar ID único oculto para el registro (ej. ALU-2026-LX8K2M)
+        const uniqueId = `ALU-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`;
+
+        // Crear objeto de alumno
+        const newStudent = {
+            id: uniqueId,
+            group: group,
+            paternalLastName: paternal,
+            maternalLastName: maternal,
+            firstName: firstName,
+            email: email
         };
 
-        btnToggleScanner.disabled = true;
-        btnToggleScanner.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando...';
+        // Agregar al estado e indexar
+        students.push(newStudent);
+        sortStudents();
+        saveToLocalStorage();
 
-        html5QrCode.start(
-            cameraId,
-            config,
-            (decodedText) => {
-                processScan(decodedText, 'camera');
-            },
-            (errorMessage) => {
-                // Errores de análisis silenciosos para mantener limpia la consola
-            }
-        ).then(() => {
-            scannerActive = true;
-            btnToggleScanner.disabled = false;
-            btnToggleScanner.innerHTML = '<i class="fa-solid fa-stop"></i> Detener Cámara';
-            btnToggleScanner.className = 'btn btn-danger btn-sm';
-            
-            scannerBadge.innerHTML = '<i class="fa-solid fa-circle"></i> Activo';
-            scannerBadge.className = 'badge badge-success animate-pulse';
-            
-            scanOverlay.style.display = 'block';
-            showToast('Escáner QR Iniciado', 'Apunta el código QR al visor de la cámara.', 'success');
-        }).catch(err => {
-            console.error("No se pudo iniciar el escáner QR:", err);
-            btnToggleScanner.disabled = false;
-            btnToggleScanner.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar Cámara';
-            showToast('Error de Cámara', 'No se pudo acceder a la cámara seleccionada.', 'danger');
-            stopScanner();
-        });
+        // Renderizar con animación especial para la nueva fila
+        render(newStudent.id);
+
+        // Limpiar solo los campos de alumno, no el grupo
+        paternalInput.value = '';
+        maternalInput.value = '';
+        firstNameInput.value = '';
+        emailInput.value = '';
+        clearFormValidationStyles();
+
+        // Notificación de Éxito
+        showToast(
+            'Alumno Registrado', 
+            `${firstName} ${paternal} ha sido agregado correctamente.`, 
+            'success'
+        );
+
+        // Generar y mostrar el Código QR del nuevo alumno
+        showQRCodeModal(newStudent);
     }
 
-    function stopScanner() {
-        scannerBadge.innerHTML = '<i class="fa-solid fa-circle"></i> Inactivo';
-        scannerBadge.className = 'badge badge-error';
-        
-        btnToggleScanner.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar Cámara';
-        btnToggleScanner.className = 'btn btn-primary btn-sm';
-        scanOverlay.style.display = 'none';
-
-        if (html5QrCode) {
-            html5QrCode.stop().then(() => {
-                html5QrCode = null;
-                scannerActive = false;
-            }).catch(err => {
-                console.error("Error deteniendo el escáner:", err);
-                html5QrCode = null;
-                scannerActive = false;
-            });
-        } else {
-            scannerActive = false;
-        }
-        
-        focusUSBInput();
+    // Guardar cambios persistentes
+    function saveToLocalStorage() {
+        localStorage.setItem('cbtis_students', JSON.stringify(students));
     }
 
-    // --- PROCESAR CÓDIGO ESCANEADO (NÚCLEO DEL NEGOCIO) ---
-    function processScan(code, source = 'camera') {
-        const studentId = code.trim();
-        if (studentId === '') return;
 
-        const targetCard = source === 'camera' ? scannerContainerCard : usbContainerCard;
-        
-        // 1. Buscar en el catálogo de alumnos
-        const student = catalog.find(s => s.id === studentId);
-        if (!student) {
-            playBeep('error');
-            triggerFlashFeedback(targetCard, 'error');
-            showToast('ID Desconocido', `El ID "${studentId}" no coincide con ningún alumno registrado.`, 'danger');
-            
-            updateLastScannedDisplay({
-                success: false,
-                id: studentId,
-                name: 'Alumno No Registrado',
-                message: 'No existe en el catálogo'
-            });
-            return;
-        }
+    // --- SISTEMA DE RENDERIZADO Y VISTAS ---
+    function render(highlightId = null) {
+        // 1. Filtrar los alumnos según la barra de búsqueda
+        const filteredStudents = students.filter(student => {
+            const query = currentFilter.toLowerCase().trim();
+            if (query === '') return true;
 
-        const todayStr = getTodayDateString();
-        const now = new Date();
-        const currentTimestamp = now.getTime();
+            const fullName = `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`.toLowerCase();
+            const alternateFullName = `${student.paternalLastName} ${student.maternalLastName} ${student.firstName}`.toLowerCase();
+            const email = (student.email || '').toLowerCase();
 
-        // 2. Inicializar base de asistencias del día si no existe
-        if (!attendance[todayStr]) {
-            attendance[todayStr] = {};
-        }
-
-        // 3. Control de duplicados en menos de 10 minutos (600,000 ms)
-        const lastScanTime = lastScans[studentId];
-        const alreadyRegisteredToday = attendance[todayStr][studentId] && attendance[todayStr][studentId].status !== 'absent';
-        
-        if (alreadyRegisteredToday && lastScanTime && (currentTimestamp - lastScanTime < 600000)) {
-            const minutesLeft = Math.ceil((600000 - (currentTimestamp - lastScanTime)) / 60000);
-            
-            playBeep('warning');
-            triggerFlashFeedback(targetCard, 'warning');
-            showToast('Ya Registrado', `${student.name} ${student.paternal} ya tiene asistencia cargada hoy.`, 'warning');
-            
-            updateLastScannedDisplay({
-                success: true,
-                isDuplicate: true,
-                id: student.id,
-                name: `${student.name} ${student.paternal} ${student.maternal}`,
-                time: attendance[todayStr][studentId].time,
-                status: attendance[todayStr][studentId].status,
-                message: `Escaneo duplicado (bloqueado por ${minutesLeft} min)`
-            });
-            return;
-        }
-
-        // 4. Evaluar estatus dinámicamente según la hora de inicio y tolerancia
-        const timeString = now.toLocaleTimeString('es-MX', { hour12: false });
-        const status = evaluateStatus(timeString);
-
-        // 5. Guardar Registro
-        attendance[todayStr][studentId] = {
-            status: status,
-            time: timeString
-        };
-        
-        // Registrar timestamp de último escaneo para control de rebotes
-        lastScans[studentId] = currentTimestamp;
-
-        // 6. Feedback sensorial completo
-        playBeep('success');
-        triggerFlashFeedback(targetCard, 'success');
-        
-        const statusLabel = status === 'present' ? 'ASISTENCIA' : 'RETARDO';
-        showToast('Registro Exitoso', `${student.name} ${student.paternal} - ${statusLabel}`, 'success');
-
-        // 7. Actualizar UI
-        updateLastScannedDisplay({
-            success: true,
-            isDuplicate: false,
-            id: student.id,
-            name: `${student.name} ${student.paternal} ${student.maternal}`,
-            time: timeString,
-            status: status
+            return fullName.includes(query) || alternateFullName.includes(query) || email.includes(query);
         });
 
-        saveAttendanceToLocalStorage();
-        render();
-    }
-
-    // --- EVALUAR ESTATUS DE LLEGADA ---
-    function evaluateStatus(timeString) {
-        const startTimeVal = cfgStartTime.value; // Formato "HH:MM"
-        const toleranceVal = parseInt(cfgTolerance.value, 10) || 0; // Minutos
-
-        const [currH, currM, currS] = timeString.split(':').map(Number);
-        const [startH, startM] = startTimeVal.split(':').map(Number);
-
-        // Convertir todo a minutos transcurridos del día para un cálculo matemático exacto
-        const currentMinutes = currH * 60 + currM;
-        const startMinutes = startH * 60;
-        const limitMinutes = startMinutes + toleranceVal;
-
-        // Si llegó antes o justo dentro del límite de tolerancia, es asistencia
-        if (currentMinutes <= limitMinutes) {
-            return 'present';
+        // 2. Controlar la visibilidad de los estados vacíos
+        if (students.length === 0) {
+            // No hay alumnos registrados en absoluto
+            emptyStateView.style.display = 'flex';
+            noResultsView.style.display = 'none';
+            studentsTable.style.display = 'none';
+            exportCsvBtn.disabled = true;
+        } else if (filteredStudents.length === 0) {
+            // Hay alumnos pero ninguno coincide con la búsqueda
+            emptyStateView.style.display = 'none';
+            noResultsView.style.display = 'flex';
+            studentsTable.style.display = 'none';
+            exportCsvBtn.disabled = true;
         } else {
-            return 'late';
-        }
-    }
-
-    // --- NOTIFICACIÓN SONORA (Web Audio API) ---
-    function playBeep(type) {
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
-            
-            const audioCtx = new AudioContext();
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-
-            if (type === 'success') {
-                // Beep corto de tono alto y agradable (Éxito)
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Nota La5 (A5)
-                gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
-                oscillator.start(audioCtx.currentTime);
-                oscillator.stop(audioCtx.currentTime + 0.15);
-            } else if (type === 'warning') {
-                // Dos beeps cortos de tono medio (Duplicado)
-                oscillator.type = 'triangle';
-                oscillator.frequency.setValueAtTime(554, audioCtx.currentTime); // Nota C#5
-                gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.22);
-                oscillator.start(audioCtx.currentTime);
-                oscillator.stop(audioCtx.currentTime + 0.22);
-            } else if (type === 'error') {
-                // Zumbido grave y de advertencia (Error)
-                oscillator.type = 'sawtooth';
-                oscillator.frequency.setValueAtTime(180, audioCtx.currentTime); 
-                gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
-                oscillator.start(audioCtx.currentTime);
-                oscillator.stop(audioCtx.currentTime + 0.35);
-            }
-        } catch (e) {
-            console.warn("Navegador bloqueó la reproducción automática de audio:", e);
-        }
-    }
-
-    // --- FEEDBACK VISUAL FLASH ---
-    function triggerFlashFeedback(element, type) {
-        const className = `flash-${type}`;
-        element.classList.remove('flash-success', 'flash-warning', 'flash-error');
-        
-        // Forzar un reflow para resetear la animación
-        void element.offsetWidth;
-        
-        element.classList.add(className);
-    }
-
-    // --- ACTUALIZAR PANTALLA DE ÚLTIMO REGISTRO ---
-    function updateLastScannedDisplay(info) {
-        resultDisplayArea.innerHTML = '';
-        
-        if (!info.success) {
-            resultDisplayArea.innerHTML = `
-                <div class="student-scanned-card status-error">
-                    <div class="scanned-title-row">
-                        <span class="scanned-name text-danger">${info.name}</span>
-                        <span class="scanned-id">ID: ${info.id}</span>
-                    </div>
-                    <div class="scanned-info-row" style="margin-top: 5px;">
-                        <span>Estatus: <strong class="text-danger">DESCONOCIDO</strong></span>
-                        <span class="text-danger">${info.message}</span>
-                    </div>
-                </div>
-            `;
-            return;
+            // Hay alumnos que coinciden con los filtros
+            emptyStateView.style.display = 'none';
+            noResultsView.style.display = 'none';
+            studentsTable.style.display = 'table';
+            exportCsvBtn.disabled = false;
         }
 
-        const isLate = info.status === 'late';
-        const statusClass = info.isDuplicate ? 'status-error' : (isLate ? 'status-late' : 'status-present');
-        const textClass = info.isDuplicate ? 'text-danger' : (isLate ? 'text-warning' : 'text-success');
-        const statusLabel = info.isDuplicate ? 'DUPLICADO' : (isLate ? 'RETARDO' : 'ASISTENCIA');
+        // 3. Renderizar filas de la tabla
+        studentsTableBody.innerHTML = '';
         
-        resultDisplayArea.innerHTML = `
-            <div class="student-scanned-card ${statusClass}">
-                <div class="scanned-title-row">
-                    <span class="scanned-name">${info.name}</span>
-                    <span class="scanned-id">${info.id}</span>
-                </div>
-                <div class="scanned-info-row" style="margin-top: 5px;">
-                    <span>Estatus: <strong class="${textClass}">${statusLabel}</strong></span>
-                    <span>Hora: <strong class="scanned-time">${info.time || '--:--:--'}</strong></span>
-                </div>
-                ${info.message ? `<div class="help-text text-warning" style="margin-bottom:0; margin-top:5px; font-weight:600;"><i class="fa-solid fa-lock"></i> ${info.message}</div>` : ''}
-            </div>
-        `;
-    }
-
-    // --- SISTEMA DE RENDERIZADO GLOBAL ---
-    function render() {
-        renderMetrics();
-        renderAttendanceTable();
-        renderCatalogTable();
-    }
-
-    // --- RENDERIZAR MÉTRICAS DEL DASHBOARD ---
-    function renderMetrics() {
-        const todayStr = getTodayDateString();
-        const dayRecords = attendance[todayStr] || {};
-
-        const totalStudents = catalog.length;
-        let present = 0;
-        let late = 0;
-
-        // Contar registros que se tengan cargados hoy
-        Object.keys(dayRecords).forEach(studentId => {
-            // Verificar que siga existiendo en el catálogo actual
-            if (catalog.some(s => s.id === studentId)) {
-                const record = dayRecords[studentId];
-                if (record.status === 'present') present++;
-                else if (record.status === 'late') late++;
-            }
-        });
-
-        const totalAttended = present + late;
-        const absent = Math.max(0, totalStudents - totalAttended);
-        const percent = totalStudents > 0 ? Math.round((totalAttended / totalStudents) * 100) : 0;
-
-        valTotal.textContent = totalStudents;
-        valPresent.textContent = present;
-        valLate.textContent = late;
-        valAbsent.textContent = absent;
-        valPercent.textContent = `${percent}%`;
-
-        // Modificar el estilo del % si es bajo o alto
-        const metricPercentCard = document.getElementById('metric-percent');
-        if (percent >= 80) {
-            metricPercentCard.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-        } else if (percent >= 60) {
-            metricPercentCard.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
-        } else {
-            metricPercentCard.style.background = 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)';
-        }
-    }
-
-    // --- RENDERIZAR TABLA DE ASISTENCIA DEL DÍA ---
-    function renderAttendanceTable() {
-        const todayStr = getTodayDateString();
-        const dayRecords = attendance[todayStr] || {};
-        const query = searchAttendance.value.toLowerCase().trim();
-        
-        attendanceTableBody.innerHTML = '';
-
-        if (catalog.length === 0) {
-            attendanceEmpty.style.display = 'flex';
-            btnResetAttendance.disabled = true;
-            btnExportCsv.disabled = true;
-            return;
-        }
-
-        // Construir fila para cada alumno del catálogo (Cruzar datos)
-        let filteredCount = 0;
-        
-        catalog.forEach((student, index) => {
-            const fullName = `${student.paternal} ${student.maternal} ${student.name}`.toLowerCase();
-            const alternateFullName = `${student.name} ${student.paternal} ${student.maternal}`.toLowerCase();
-            
-            // Buscar por nombre o ID
-            if (query !== '' && !fullName.includes(query) && !alternateFullName.includes(query) && !student.id.toLowerCase().includes(query)) {
-                return;
-            }
-
-            filteredCount++;
-            const record = dayRecords[student.id];
-            
-            // Determinar Estatus
-            let status = 'absent';
-            let regTime = '--:--:--';
-            
-            if (record) {
-                status = record.status;
-                regTime = record.time || '--:--:--';
-            }
-
+        filteredStudents.forEach((student, index) => {
             const row = document.createElement('tr');
-            
-            let badgeClass = 'status-falta';
-            let badgeText = 'Falta';
-            if (status === 'present') {
-                badgeClass = 'status-presente';
-                badgeText = 'Asistencia';
-            } else if (status === 'late') {
-                badgeClass = 'status-retardo';
-                badgeText = 'Retardo';
+            row.id = `row-${student.id}`;
+
+            // Si es un nuevo alumno recién agregado, añadir clase de animación
+            if (highlightId && student.id === highlightId) {
+                row.classList.add('row-new');
             }
 
             row.innerHTML = `
                 <td class="col-num">${index + 1}</td>
-                <td><strong>${student.id}</strong></td>
-                <td>${student.paternal} ${student.maternal}, ${student.name}</td>
-                <td style="text-align: center;">
-                    <span class="status-pill ${badgeClass}">${badgeText}</span>
-                </td>
-                <td style="text-align: center; font-family: monospace; font-weight: 600;">${regTime}</td>
-                <td style="text-align: center;">
-                    <div class="row-actions">
-                        <button class="btn-row-action btn-row-edit" onclick="openManualEdit('${student.id}')" title="Editar Estatus">
-                            <i class="fa-solid fa-user-pen"></i>
+                <td>${escapeHTML(student.paternalLastName)}</td>
+                <td>${escapeHTML(student.maternalLastName)}</td>
+                <td>${escapeHTML(student.firstName)}</td>
+                <td>${escapeHTML(student.email || '-')}</td>
+                <td class="col-actions">
+                    <div class="action-buttons">
+                        <button 
+                            class="btn-action btn-qr-row" 
+                            data-id="${student.id}" 
+                            title="Ver Código QR"
+                            aria-label="Ver QR de ${escapeHTML(student.firstName)}"
+                        >
+                            <i class="fa-solid fa-qrcode"></i>
                         </button>
-                        ${status !== 'absent' ? `
-                            <button class="btn-row-action btn-row-delete" onclick="removeRegistration('${student.id}')" title="Eliminar Asistencia">
-                                <i class="fa-solid fa-trash-can"></i>
-                            </button>
-                        ` : `
-                            <button class="btn-row-action" style="opacity:0.25; cursor:not-allowed;" disabled>
-                                <i class="fa-solid fa-trash-can"></i>
-                            </button>
-                        `}
+                        <button 
+                            class="btn-action btn-edit-row" 
+                            data-id="${student.id}" 
+                            title="Editar Alumno"
+                            aria-label="Editar ${escapeHTML(student.firstName)}"
+                        >
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button 
+                            class="btn-action btn-delete-row" 
+                            data-id="${student.id}" 
+                            title="Eliminar Alumno"
+                            aria-label="Eliminar ${escapeHTML(student.firstName)}"
+                        >
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
                     </div>
                 </td>
             `;
 
-            attendanceTableBody.appendChild(row);
+            studentsTableBody.appendChild(row);
         });
 
-        if (filteredCount === 0) {
-            attendanceEmpty.style.display = 'flex';
-        } else {
-            attendanceEmpty.style.display = 'none';
-        }
+        // Registrar dinámicamente eventos para botones de acciones en la tabla
+        document.querySelectorAll('.btn-qr-row').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const studentId = btn.getAttribute('data-id');
+                const targetStudent = students.find(s => s.id === studentId);
+                if (targetStudent) {
+                    showQRCodeModal(targetStudent);
+                }
+            });
+        });
 
-        btnResetAttendance.disabled = false;
-        btnExportCsv.disabled = false;
+        document.querySelectorAll('.btn-edit-row').forEach(btn => {
+            btn.addEventListener('click', () => openEditModal(btn.getAttribute('data-id')));
+        });
+
+        document.querySelectorAll('.btn-delete-row').forEach(btn => {
+            btn.addEventListener('click', () => openDeleteModal(btn.getAttribute('data-id')));
+        });
+
+        // 4. Actualizar contadores
+        totalCountSpan.textContent = students.length;
     }
 
-    // --- RENDERIZAR TABLA DE CATÁLOGO ---
-    function renderCatalogTable() {
-        const query = searchCatalog.value.toLowerCase().trim();
-        catalogTableBody.innerHTML = '';
+
+    // --- MANEJO DE BÚSQUEDA ---
+    function handleSearch(e) {
+        currentFilter = e.target.value;
         
-        catalogCountBadge.textContent = catalog.length;
-
-        if (catalog.length === 0) {
-            catalogEmpty.style.display = 'flex';
-            return;
-        }
-
-        let filteredCount = 0;
-
-        catalog.forEach(student => {
-            const fullName = `${student.paternal} ${student.maternal} ${student.name}`.toLowerCase();
-            const alternateFullName = `${student.name} ${student.paternal} ${student.maternal}`.toLowerCase();
-
-            if (query !== '' && !fullName.includes(query) && !alternateFullName.includes(query) && !student.id.toLowerCase().includes(query)) {
-                return;
-            }
-
-            filteredCount++;
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><strong>${student.id}</strong></td>
-                <td>${student.paternal} ${student.maternal}, ${student.name}</td>
-                <td style="text-align: center;">
-                    <button class="btn-row-action btn-row-delete" onclick="deleteCatalogStudent('${student.id}')" title="Eliminar Alumno del Catálogo">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
-                </td>
-            `;
-            catalogTableBody.appendChild(row);
-        });
-
-        if (filteredCount === 0) {
-            catalogEmpty.style.display = 'flex';
+        // Mostrar u ocultar botón de limpiar búsqueda
+        if (currentFilter.length > 0) {
+            clearSearchBtn.style.display = 'flex';
         } else {
-            catalogEmpty.style.display = 'none';
+            clearSearchBtn.style.display = 'none';
         }
+
+        render();
     }
 
-    // --- MANUAL EDIT STATUS MODAL ---
-    window.openManualEdit = function(studentId) {
-        const student = catalog.find(s => s.id === studentId);
+    function handleClearSearch() {
+        searchInput.value = '';
+        currentFilter = '';
+        clearSearchBtn.style.display = 'none';
+        searchInput.focus();
+        render();
+    }
+
+
+    // --- MODAL DE EDICIÓN ---
+    function openEditModal(id) {
+        const student = students.find(s => s.id === id);
         if (!student) return;
 
-        studentToEditId = studentId;
-        modalStudentName.textContent = `${student.name} ${student.paternal} ${student.maternal}`;
-        modalStudentId.textContent = student.id;
+        studentToEditId = id;
 
-        const todayStr = getTodayDateString();
-        const record = attendance[todayStr] ? attendance[todayStr][studentId] : null;
-        
-        if (record) {
-            modalStatusSelect.value = record.status;
-        } else {
-            modalStatusSelect.value = 'absent';
-        }
+        // Construir contenido dinámico del formulario de edición dentro del modal
+        editModalBody.innerHTML = `
+            <div class="form-modal-edit" style="display: flex; flex-direction: column; gap: 1.2rem;">
+                <div class="input-group">
+                    <label for="edit-paternal-name">
+                        <i class="fa-solid fa-signature input-icon"></i> Apellido Paterno
+                    </label>
+                    <input type="text" id="edit-paternal-name" value="${escapeHTML(student.paternalLastName)}" required>
+                    <span class="error-message">Este campo es requerido.</span>
+                </div>
+                <div class="input-group">
+                    <label for="edit-maternal-name">
+                        <i class="fa-solid fa-signature input-icon"></i> Apellido Materno
+                    </label>
+                    <input type="text" id="edit-maternal-name" value="${escapeHTML(student.maternalLastName)}" required>
+                    <span class="error-message">Este campo es requerido.</span>
+                </div>
+                <div class="input-group">
+                    <label for="edit-first-name">
+                        <i class="fa-solid fa-user input-icon"></i> Nombre(s)
+                    </label>
+                    <input type="text" id="edit-first-name" value="${escapeHTML(student.firstName)}" required>
+                    <span class="error-message">Este campo es requerido.</span>
+                </div>
+                <div class="input-group">
+                    <label for="edit-email">
+                        <i class="fa-solid fa-envelope input-icon"></i> Correo Electrónico
+                    </label>
+                    <input type="email" id="edit-email" value="${escapeHTML(student.email || '')}" required>
+                    <span class="error-message">Este campo es requerido.</span>
+                </div>
+            </div>
+        `;
 
+        // Añadir escuchas de validación a campos de edición
+        const editPaternal = document.getElementById('edit-paternal-name');
+        const editMaternal = document.getElementById('edit-maternal-name');
+        const editFirstName = document.getElementById('edit-first-name');
+        const editEmail = document.getElementById('edit-email');
+
+        [editPaternal, editMaternal, editFirstName, editEmail].forEach(input => {
+            input.addEventListener('input', () => validateField(input));
+        });
+
+        // Mostrar modal agregando clase active
         editModal.classList.add('active');
         editModal.setAttribute('aria-hidden', 'false');
-    };
+        editPaternal.focus();
+    }
 
     function closeEditModal() {
         editModal.classList.remove('active');
         editModal.setAttribute('aria-hidden', 'true');
         studentToEditId = null;
-        focusUSBInput();
     }
 
-    function saveManualStatusChange() {
+    function saveStudentEdit() {
         if (!studentToEditId) return;
 
-        const todayStr = getTodayDateString();
-        const selectedStatus = modalStatusSelect.value;
-        
-        if (!attendance[todayStr]) {
-            attendance[todayStr] = {};
-        }
+        const editPaternal = document.getElementById('edit-paternal-name');
+        const editMaternal = document.getElementById('edit-maternal-name');
+        const editFirstName = document.getElementById('edit-first-name');
+        const editEmail = document.getElementById('edit-email');
 
-        if (selectedStatus === 'absent') {
-            // Eliminar registro del día para regresarlo a ausente
-            delete attendance[todayStr][studentToEditId];
-            delete lastScans[studentToEditId];
-        } else {
-            // Asignar estatus manualmente con hora actual si es nuevo, o mantener hora anterior
-            const existingTime = attendance[todayStr][studentToEditId] ? attendance[todayStr][studentToEditId].time : null;
-            const timeString = existingTime || new Date().toLocaleTimeString('es-MX', { hour12: false });
-            
-            attendance[todayStr][studentToEditId] = {
-                status: selectedStatus,
-                time: timeString
-            };
-            lastScans[studentToEditId] = Date.now();
-        }
+        // Validar campos en el modal
+        const isPaternalValid = validateField(editPaternal);
+        const isMaternalValid = validateField(editMaternal);
+        const isNameValid = validateField(editFirstName);
+        const isEmailValid = validateField(editEmail);
 
-        saveAttendanceToLocalStorage();
-        render();
-        closeEditModal();
-        showToast('Asistencia Modificada', 'El estatus del alumno ha sido actualizado manualmente.', 'success');
-    }
-
-    window.removeRegistration = function(studentId) {
-        const todayStr = getTodayDateString();
-        if (attendance[todayStr] && attendance[todayStr][studentId]) {
-            const student = catalog.find(s => s.id === studentId);
-            const studentName = student ? student.name : 'El alumno';
-            
-            delete attendance[todayStr][studentId];
-            delete lastScans[studentId];
-            
-            saveAttendanceToLocalStorage();
-            render();
-            showToast('Asistencia Eliminada', `Se removió el registro de asistencia de ${studentName}.`, 'info');
-        }
-        focusUSBInput();
-    };
-
-    // --- ELIMINAR ESTUDIANTE DEL CATÁLOGO ---
-    window.deleteCatalogStudent = function(studentId) {
-        const student = catalog.find(s => s.id === studentId);
-        const studentName = student ? `${student.name} ${student.paternal}` : 'El alumno';
-        
-        if (confirm(`¿Estás seguro de que deseas eliminar a "${studentName}" del catálogo? Esto también eliminará su asistencia del día.`)) {
-            catalog = catalog.filter(s => s.id !== studentId);
-            
-            const todayStr = getTodayDateString();
-            if (attendance[todayStr]) {
-                delete attendance[todayStr][studentId];
-                delete lastScans[studentId];
-            }
-
-            saveCatalogToLocalStorage();
-            saveAttendanceToLocalStorage();
-            render();
-            showToast('Catálogo Actualizado', `Se eliminó a ${studentName} correctamente.`, 'success');
-        }
-        focusUSBInput();
-    };
-
-    // --- AGREGAR ALUMNO MANUALMENTE AL CATÁLOGO ---
-    function handleAddStudentSubmit(e) {
-        e.preventDefault();
-        
-        const id = document.getElementById('stu-id').value.trim().toUpperCase();
-        const paternal = capitalizeText(document.getElementById('stu-paternal').value.trim());
-        const maternal = capitalizeText(document.getElementById('stu-maternal').value.trim());
-        const name = capitalizeText(document.getElementById('stu-name').value.trim());
-
-        // Validar duplicados de matrícula en el catálogo
-        if (catalog.some(s => s.id === id)) {
-            showToast('ID Duplicado', `La matrícula "${id}" ya se encuentra registrada en el catálogo.`, 'warning');
+        if (!isPaternalValid || !isMaternalValid || !isNameValid || !isEmailValid) {
+            showToast('Formulario Incompleto', 'Por favor, llena todos los campos en la edición.', 'warning');
             return;
         }
 
-        const newStudent = { id, paternal, maternal, name };
-        catalog.push(newStudent);
-        
-        // Ordenar alfabéticamente por apellido paterno -> materno -> nombre
-        sortCatalog();
-        
-        saveCatalogToLocalStorage();
-        render();
-        addStudentForm.reset();
-        
-        showToast('Alumno Agregado', `${name} ${paternal} fue registrado en el catálogo.`, 'success');
-        focusUSBInput();
+        // Encontrar e indexar estudiante
+        const index = students.findIndex(s => s.id === studentToEditId);
+        if (index !== -1) {
+            const formattedPaternal = capitalizeText(editPaternal.value);
+            const formattedMaternal = capitalizeText(editMaternal.value);
+            const formattedName = capitalizeText(editFirstName.value);
+            const formattedEmail = editEmail.value.trim().toLowerCase();
+
+            // Verificar si el nuevo nombre es un duplicado de otro alumno
+            const isDuplicate = students.some(student => 
+                student.id !== studentToEditId &&
+                student.firstName.toLowerCase().trim() === formattedName.toLowerCase().trim() &&
+                student.paternalLastName.toLowerCase().trim() === formattedPaternal.toLowerCase().trim() &&
+                student.maternalLastName.toLowerCase().trim() === formattedMaternal.toLowerCase().trim()
+            );
+
+            if (isDuplicate) {
+                showToast(
+                    'Registro Duplicado', 
+                    `El alumno "${formattedName} ${formattedPaternal} ${formattedMaternal}" ya se encuentra registrado.`, 
+                    'warning'
+                );
+                return;
+            }
+
+            students[index] = {
+                ...students[index],
+                paternalLastName: formattedPaternal,
+                maternalLastName: formattedMaternal,
+                firstName: formattedName,
+                email: formattedEmail
+            };
+
+            sortStudents();
+            saveToLocalStorage();
+            render();
+            closeEditModal();
+
+            showToast(
+                'Datos Actualizados', 
+                `Se guardaron los cambios para ${formattedName} ${formattedPaternal}.`, 
+                'success'
+            );
+        }
     }
 
-    // --- CARGA DE ARCHIVOS CSV PARA EL CATÁLOGO ---
+
+    // --- MODAL DE ELIMINACIÓN ---
+    function openDeleteModal(id) {
+        const student = students.find(s => s.id === id);
+        if (!student) return;
+
+        studentToDeleteId = id;
+        deleteStudentNameSpan.textContent = `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`;
+
+        deleteModal.classList.add('active');
+        deleteModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDeleteModal() {
+        deleteModal.classList.remove('active');
+        deleteModal.setAttribute('aria-hidden', 'true');
+        studentToDeleteId = null;
+    }
+
+    function confirmDelete() {
+        if (!studentToDeleteId) return;
+
+        const targetId = studentToDeleteId;
+        const student = students.find(s => s.id === targetId);
+        const studentName = student ? `${student.firstName} ${student.paternalLastName}` : 'El alumno';
+        
+        const row = document.getElementById(`row-${targetId}`);
+        
+        // Cerrar modal inmediatamente
+        closeDeleteModal();
+
+        // Si la fila está en el render actual, ejecutar animación de salida antes de remover del DOM
+        if (row) {
+            row.classList.add('row-delete');
+            // Esperar a que acabe la animación (300ms)
+            setTimeout(() => {
+                executeDeletion(targetId, studentName);
+            }, 300);
+        } else {
+            executeDeletion(targetId, studentName);
+        }
+    }
+
+    function executeDeletion(id, name) {
+        students = students.filter(s => s.id !== id);
+        saveToLocalStorage();
+        render();
+
+        showToast(
+            'Registro Eliminado', 
+            `${name} ha sido removido del sistema.`, 
+            'danger'
+        );
+    }
+
+    // --- MODAL DE LIMPIEZA DE TABLA ---
+    function openClearModal() {
+        if (students.length === 0) {
+            showToast('Tabla ya Vacía', 'No hay registros en pantalla para limpiar.', 'info');
+            return;
+        }
+        confirmClearModal.classList.add('active');
+        confirmClearModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeClearModal() {
+        confirmClearModal.classList.remove('active');
+        confirmClearModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function confirmClearTable() {
+        closeClearModal();
+        
+        // Animación de salida a todas las filas antes de vaciar
+        const rows = document.querySelectorAll('#students-table-body tr');
+        if (rows.length > 0) {
+            rows.forEach(row => {
+                row.classList.add('row-delete');
+            });
+            
+            // Esperar que acabe la animación (300ms)
+            setTimeout(() => {
+                executeClearTable();
+            }, 300);
+        } else {
+            executeClearTable();
+        }
+    }
+
+    function executeClearTable() {
+        students = [];
+        saveToLocalStorage();
+        
+        // Limpiar inputs del formulario y sus validaciones
+        registrationForm.reset();
+        clearFormValidationStyles();
+        
+        render();
+
+        showToast(
+            'Pantalla Limpiada',
+            'Se han borrado los registros de la pantalla. Listo para iniciar un nuevo grupo.',
+            'info'
+        );
+    }
+
+    // --- MODAL Y GENERACIÓN DE CÓDIGO QR ---
+    function showQRCodeModal(student) {
+        if (!student) return;
+        currentQRStudent = student;
+
+        const fullName = `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`;
+        if (qrStudentName) qrStudentName.textContent = fullName;
+        if (qrStudentGroup) qrStudentGroup.innerHTML = `<i class="fa-solid fa-users-rectangle"></i> Grupo: <strong>${escapeHTML(student.group)}</strong>`;
+        if (qrStudentEmail) qrStudentEmail.innerHTML = `<i class="fa-solid fa-envelope"></i> Correo: <strong>${escapeHTML(student.email || 'N/A')}</strong>`;
+
+        if (qrCodeContainer) {
+            qrCodeContainer.innerHTML = '';
+
+            const qrData = JSON.stringify({
+                escuela: "CBTis 111",
+                id: student.id,
+                nombre: fullName,
+                grupo: student.group,
+                correo: student.email
+            });
+
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(qrCodeContainer, {
+                    text: qrData,
+                    width: 180,
+                    height: 180,
+                    colorDark: "#0F172A",
+                    colorLight: "#FFFFFF",
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            } else {
+                const img = document.createElement('img');
+                img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`;
+                img.alt = `QR ${student.firstName}`;
+                qrCodeContainer.appendChild(img);
+            }
+        }
+
+        if (qrModal) {
+            qrModal.classList.add('active');
+            qrModal.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    function closeQRCodeModal() {
+        if (qrModal) {
+            qrModal.classList.remove('active');
+            qrModal.setAttribute('aria-hidden', 'true');
+        }
+        currentQRStudent = null;
+    }
+
+    function downloadQRCode() {
+        if (!currentQRStudent || !qrCodeContainer) return;
+
+        const qrCanvas = qrCodeContainer.querySelector('canvas');
+        const qrImg = qrCodeContainer.querySelector('img');
+
+        let imageSrc = '';
+        if (qrCanvas) {
+            imageSrc = qrCanvas.toDataURL('image/png');
+        } else if (qrImg) {
+            imageSrc = qrImg.src;
+        }
+
+        if (!imageSrc) {
+            showToast('Error', 'No se pudo generar la imagen del código QR.', 'danger');
+            return;
+        }
+
+        const link = document.createElement('a');
+        const fileName = `QR_${currentQRStudent.paternalLastName}_${currentQRStudent.firstName}_${currentQRStudent.group}.png`
+            .replace(/\s+/g, '_');
+        link.download = fileName;
+        link.href = imageSrc;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast('QR Descargado', `Se ha guardado la imagen QR de ${currentQRStudent.firstName}.`, 'success');
+    }
+
+    function printQRCode() {
+        window.print();
+    }
+
+
+
+    // --- EXPORTAR A CSV (UTF-8 con BOM para soporte Excel) ---
+    function exportToCSV() {
+        if (students.length === 0) {
+            showToast('Exportación Fallida', 'No hay alumnos registrados para exportar.', 'warning');
+            return;
+        }
+
+        const rawGroup = groupInput.value.trim();
+        if (rawGroup === '') {
+            showToast('Grupo Requerido', 'Por favor, escribe el grupo en el formulario para nombrar el archivo.', 'warning');
+            validateField(groupInput);
+            groupInput.focus();
+            return;
+        }
+
+        const safeGroup = rawGroup
+            .replace(/[\/\\?%*:|"<>.]/g, '')
+            .replace(/\s+/g, '_');
+
+        // Cabecera del archivo CSV con el ID Único del alumno
+        let csvContent = `Grupo Escolar: ${rawGroup}\nNº,ID Alumno,Apellido Paterno,Apellido Materno,Nombre(s),Correo Electrónico\n`;
+
+        // Mapeo y formateo de filas
+        students.forEach((student, index) => {
+            const num = index + 1;
+            
+            // Sanitizar valores (escapar comillas dobles y englobar entre comillas si es necesario)
+            const studentId = escapeCSVField(student.id || '');
+            const paternal = escapeCSVField(student.paternalLastName);
+            const maternal = escapeCSVField(student.maternalLastName);
+            const name = escapeCSVField(student.firstName);
+            const email = escapeCSVField(student.email || '');
+
+            csvContent += `${num},${studentId},${paternal},${maternal},${name},${email}\n`;
+        });
+
+        // Agregar la marca de orden de bytes (BOM) UTF-8 (\uFEFF) para que Excel reconozca la codificación automáticamente
+        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        
+        // Crear elemento de descarga oculto
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+
+            // Nombre del archivo con formato: alumnos_cbtis_Grupo_AAAA-MM-DD.csv
+            const today = new Date();
+            const dateStr = today.toISOString().split('T')[0];
+            link.setAttribute("download", `alumnos_cbtis_${safeGroup}_${dateStr}.csv`);
+            
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast(
+                'Exportación Exitosa', 
+                `Se ha descargado el archivo CSV con ${students.length} registros.`, 
+                'success'
+            );
+        } else {
+            showToast('Error', 'Tu navegador no soporta la descarga de archivos directa.', 'danger');
+        }
+    }
+
+
+    // --- SISTEMA DE TOAST NOTIFICATIONS ---
+    function showToast(title, message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+
+        // Selección de iconos por tipo
+        let iconClass = 'fa-solid fa-circle-info';
+        if (type === 'success') iconClass = 'fa-solid fa-circle-check';
+        if (type === 'danger') iconClass = 'fa-solid fa-triangle-exclamation';
+        if (type === 'warning') iconClass = 'fa-solid fa-circle-exclamation';
+
+        toast.innerHTML = `
+            <i class="${iconClass} toast-icon"></i>
+            <div class="toast-content">
+                <h4 class="toast-title">${title}</h4>
+                <p class="toast-message">${message}</p>
+            </div>
+            <button class="toast-close" aria-label="Cerrar notificación">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="toast-progress"></div>
+        `;
+
+        // Evento botón cerrar
+        toast.querySelector('.toast-close').addEventListener('click', () => {
+            dismissToast(toast);
+        });
+
+        // Agregar al contenedor
+        toastContainer.appendChild(toast);
+
+        // Auto-eliminar después de 4 segundos
+        setTimeout(() => {
+            dismissToast(toast);
+        }, 4000);
+    }
+
+    function dismissToast(toast) {
+        if (!toast.parentNode) return;
+        toast.style.animation = 'toastOut 0.3s ease forwards';
+        // Esperar a que acabe la animación de salida
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toastContainer.removeChild(toast);
+            }
+        }, 300);
+    }
+
+
+    // --- AYUDANTES Y UTILIDADES (UTILITIES) ---
+
+    /**
+     * Capitaliza la primera letra de cada palabra de una cadena y limpia espacios innecesarios.
+     * Ejemplo: "  césar   ramón  " -> "César Ramón"
+     */
+    function capitalizeText(str) {
+        if (!str) return '';
+        return str
+            .trim()
+            .split(/\s+/)
+            .map(word => {
+                if (word.length === 0) return '';
+                // Soporta acentos y la letra Ñ adecuadamente al capitalizar
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            })
+            .join(' ');
+    }
+
+    /**
+     * Escapa caracteres de campo CSV si contienen comillas, comas o saltos de línea.
+     */
+    function escapeCSVField(val) {
+        let stringVal = val ? val.toString() : '';
+        // Si contiene comillas dobles, duplicarlas para escapar según estándar CSV
+        if (stringVal.includes('"')) {
+            stringVal = stringVal.replace(/"/g, '""');
+        }
+        // Si contiene comas, comillas o saltos de línea, envolver el campo en comillas dobles
+        if (stringVal.includes(',') || stringVal.includes('"') || stringVal.includes('\n')) {
+            stringVal = `"${stringVal}"`;
+        }
+        return stringVal;
+    }
+
+    /**
+     * Sanitiza entrada HTML para evitar vulnerabilidades XSS
+     */
+    function escapeHTML(str) {
+        if (!str) return '';
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    /**
+     * Ordena la lista de alumnos alfabéticamente de la A a la Z.
+     * Criterio: Apellido Paterno -> Apellido Materno -> Nombre(s)
+     * Utiliza la configuración regional en español ('es') para manejar acentos y la letra Ñ correctamente.
+     */
+    function sortStudents() {
+        students.sort((a, b) => {
+            let cmp = a.paternalLastName.localeCompare(b.paternalLastName, 'es', { sensitivity: 'base' });
+            if (cmp !== 0) return cmp;
+            
+            cmp = a.maternalLastName.localeCompare(b.maternalLastName, 'es', { sensitivity: 'base' });
+            if (cmp !== 0) return cmp;
+            
+            return a.firstName.localeCompare(b.firstName, 'es', { sensitivity: 'base' });
+        });
+    }
+
+    // --- FUNCIONES Y LÓGICA DE ASISTENCIA ---
+
+    function setupTabs() {
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const targetTab = btn.getAttribute('data-tab');
+                if (targetTab === 'registro') {
+                    viewRegistro.style.display = 'grid';
+                    viewAsistencia.style.display = 'none';
+                } else {
+                    viewRegistro.style.display = 'none';
+                    viewAsistencia.style.display = 'grid';
+                    renderAttendance();
+                }
+            });
+        });
+    }
+
+    function importFromRegistry() {
+        if (students.length === 0) {
+            showToast('Importación Vacía', 'No hay alumnos registrados en el sistema para importar.', 'warning');
+            return;
+        }
+
+        // Mapear y asignar a alumnos de asistencia
+        attendanceStudents = students.map(student => ({
+            id: student.id,
+            name: `${student.paternalLastName} ${student.maternalLastName} ${student.firstName}`,
+            email: student.email || ''
+        }));
+
+        // Ordenar alfabéticamente
+        attendanceStudents.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+
+        saveAttendanceToLocalStorage();
+        renderAttendance();
+
+        showToast('Importación Exitosa', `Se han importado ${attendanceStudents.length} alumnos desde el registro.`, 'success');
+    }
+
     function handleCSVUpload(e) {
         const file = e.target.files[0];
-        if (file) handleCSVFile(file);
-    }
+        if (!file) return;
 
-    function handleCSVFile(file) {
         const reader = new FileReader();
         reader.onload = function(evt) {
             const text = evt.target.result;
             const parsed = parseCSV(text);
-            
             if (parsed.length === 0) {
-                showToast('Error de Carga', 'No se detectaron alumnos válidos en el archivo CSV. Revisa el formato.', 'danger');
+                showToast('Error de Carga', 'No se pudieron extraer alumnos del archivo CSV. Asegúrate del formato.', 'danger');
                 return;
             }
 
-            // Preguntar si desea fusionar o sobrescribir el catálogo
-            if (catalog.length > 0) {
-                if (confirm(`Se detectaron ${parsed.length} alumnos en el CSV. ¿Deseas FUSIONAR los alumnos con el catálogo actual? (Pulsa Cancelar para SOBRESCRIBIR todo el catálogo).`)) {
-                    // Fusionar omitiendo duplicados de ID
-                    let addedCount = 0;
-                    parsed.forEach(student => {
-                        if (!catalog.some(s => s.id === student.id)) {
-                            catalog.push(student);
-                            addedCount++;
-                        }
-                    });
-                    sortCatalog();
-                    showToast('Catálogo Fusionado', `Se agregaron ${addedCount} alumnos nuevos.`, 'success');
-                } else {
-                    // Sobrescribir
-                    catalog = parsed;
-                    showToast('Catálogo Cargado', `Se importaron ${catalog.length} alumnos del archivo CSV.`, 'success');
-                }
-            } else {
-                catalog = parsed;
-                showToast('Catálogo Cargado', `Se cargaron ${catalog.length} alumnos desde el archivo CSV.`, 'success');
-            }
+            attendanceStudents = parsed;
+            saveAttendanceToLocalStorage();
+            renderAttendance();
 
-            saveCatalogToLocalStorage();
-            render();
+            showToast('Carga de CSV Exitosa', `Se han cargado ${attendanceStudents.length} alumnos desde el archivo CSV.`, 'success');
             csvFileInput.value = '';
         };
         reader.onerror = function() {
-            showToast('Error de Lectura', 'No se pudo leer el archivo seleccionado.', 'danger');
+            showToast('Error', 'No se pudo leer el archivo CSV.', 'danger');
         };
         reader.readAsText(file, 'UTF-8');
     }
 
     function parseCSV(text) {
-        // Soporta saltos de línea tanto de Windows (\r\n) como de Mac/Linux (\n)
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+        const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
         if (lines.length === 0) return [];
 
-        let parsed = [];
+        let parsedStudents = [];
         let hasHeader = false;
 
-        // Detectar si la primera fila es cabecera
         const firstLine = lines[0].toLowerCase();
-        if (firstLine.includes('id') || firstLine.includes('matricula') || firstLine.includes('nombre') || firstLine.includes('apellido')) {
+        if (firstLine.includes('nombre') || firstLine.includes('apellido') || firstLine.includes('email') || firstLine.includes('correo') || firstLine.includes('nº')) {
             hasHeader = true;
         }
 
         const startIndex = hasHeader ? 1 : 0;
 
         for (let i = startIndex; i < lines.length; i++) {
-            const columns = splitCSVLine(lines[i]);
-            if (columns.length < 4) continue;
+            const line = lines[i];
+            const columns = splitCSVLine(line);
 
-            const id = columns[0].trim().toUpperCase();
-            const paternal = capitalizeText(columns[1].trim());
-            const maternal = capitalizeText(columns[2].trim());
-            const name = capitalizeText(columns[3].trim());
+            if (columns.length === 0) continue;
 
-            if (id && name) {
-                parsed.push({ id, paternal, maternal, name });
+            let name = '';
+            let email = '';
+
+            if (columns.length === 1) {
+                name = columns[0];
+            } else if (columns.length === 2) {
+                name = columns[0];
+                email = columns[1];
+            } else if (columns.length >= 3) {
+                if (columns.length >= 4) {
+                    if (columns[3].includes('@')) {
+                        name = `${columns[2]} ${columns[0]} ${columns[1]}`;
+                        email = columns[3];
+                    } else {
+                        name = `${columns[0]} ${columns[1]} ${columns[2]}`;
+                    }
+                } else {
+                    name = `${columns[2]} ${columns[0]} ${columns[1]}`;
+                }
+            }
+
+            if (name) {
+                parsedStudents.push({
+                    id: 'att-' + Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9),
+                    name: capitalizeText(name),
+                    email: email.trim().toLowerCase()
+                });
             }
         }
 
-        return parsed;
+        parsedStudents.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+        return parsedStudents;
     }
 
     function splitCSVLine(line) {
         const result = [];
         let current = '';
         let inQuotes = false;
-        
         for (let i = 0; i < line.length; i++) {
             const char = line[i];
             if (char === '"' || char === "'") {
@@ -1022,213 +1167,189 @@ document.addEventListener('DOMContentLoaded', () => {
         return result;
     }
 
-    // --- ACCIONES DE RESTAURACIÓN / LIMPIEZA DE CATÁLOGO ---
-    function restoreSampleCatalog() {
-        if (confirm('¿Deseas restaurar los alumnos de ejemplo en el catálogo? Esto fusionará o sobrescribirá tus datos actuales.')) {
-            catalog = [...DEFAULT_STUDENTS];
-            saveCatalogToLocalStorage();
-            render();
-            showToast('Catálogo Restaurado', 'Se cargaron los 10 alumnos de ejemplo.', 'success');
-        }
-        focusUSBInput();
-    }
+    function renderAttendance() {
+        const date = attDateInput.value;
+        if (!date) return;
 
-    function clearEntireCatalog() {
-        if (confirm('¡ADVERTENCIA CRÍTICA! ¿Estás seguro de que deseas eliminar TODOS los alumnos del catálogo y borrar todos los registros de asistencia? Esta acción no se puede deshacer.')) {
-            catalog = [];
-            attendance = {};
-            lastScans = {};
-            saveCatalogToLocalStorage();
-            saveAttendanceToLocalStorage();
-            render();
-            
-            // Vaciar pantalla de último resultado
-            resultDisplayArea.innerHTML = `
-                <div class="result-placeholder">
-                    <i class="fa-solid fa-barcode-read animate-bounce"></i>
-                    <p>Esperando escaneo QR o entrada...</p>
-                </div>
+        const filtered = attendanceStudents.filter(student => {
+            const query = attendanceFilter.toLowerCase().trim();
+            if (query === '') return true;
+            return student.name.toLowerCase().includes(query) || student.email.toLowerCase().includes(query);
+        });
+
+        if (attendanceStudents.length === 0) {
+            attEmptyState.style.display = 'flex';
+            attNoResults.style.display = 'none';
+            attTable.style.display = 'none';
+        } else if (filtered.length === 0) {
+            attEmptyState.style.display = 'none';
+            attNoResults.style.display = 'flex';
+            attTable.style.display = 'none';
+        } else {
+            attEmptyState.style.display = 'none';
+            attNoResults.style.display = 'none';
+            attTable.style.display = 'table';
+        }
+
+        if (!attendanceHistory[date]) {
+            attendanceHistory[date] = {};
+        }
+        const dayRecords = attendanceHistory[date];
+
+        attTableBody.innerHTML = '';
+        filtered.forEach((student, index) => {
+            if (!dayRecords[student.id]) {
+                dayRecords[student.id] = 'present';
+            }
+            const status = dayRecords[student.id];
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td class="col-num">${index + 1}</td>
+                <td><strong style="color: var(--text-primary); font-weight: 500;">${escapeHTML(student.name)}</strong></td>
+                <td>
+                    <div class="attendance-options" data-student-id="${student.id}">
+                        <button class="att-btn att-present ${status === 'present' ? 'active' : ''}" data-status="present" aria-label="Presente">
+                            <i class="fa-solid fa-check"></i> Pres
+                        </button>
+                        <button class="att-btn att-absent ${status === 'absent' ? 'active' : ''}" data-status="absent" aria-label="Ausente">
+                            <i class="fa-solid fa-xmark"></i> Aus
+                        </button>
+                    </div>
+                </td>
             `;
-            
-            showToast('Base de Datos Vacía', 'Se borraron todos los registros del catálogo y asistencia.', 'info');
-        }
-        focusUSBInput();
+            attTableBody.appendChild(row);
+        });
+
+        document.querySelectorAll('.attendance-options').forEach(group => {
+            const studentId = group.getAttribute('data-student-id');
+            group.querySelectorAll('.att-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const status = btn.getAttribute('data-status');
+                    
+                    group.querySelectorAll('.att-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    attendanceHistory[date][studentId] = status;
+                    
+                    saveAttendanceToLocalStorage();
+                    updateAttendanceStats();
+                });
+            });
+        });
+
+        updateAttendanceStats();
     }
 
-    // --- REINICIAR ASISTENCIA DEL DÍA ---
-    function resetDailyAttendance() {
-        if (confirm('¿Deseas reiniciar toda la lista de asistencia del día de hoy? Todos los alumnos volverán al estatus de "Falta".')) {
-            const todayStr = getTodayDateString();
-            attendance[todayStr] = {};
-            lastScans = {};
-            
-            saveAttendanceToLocalStorage();
-            render();
-            
-            resultDisplayArea.innerHTML = `
-                <div class="result-placeholder">
-                    <i class="fa-solid fa-barcode-read animate-bounce"></i>
-                    <p>Esperando escaneo QR o entrada...</p>
-                </div>
-            `;
-            
-            showToast('Asistencia Reiniciada', 'Todos los alumnos fueron marcados con Falta.', 'info');
-        }
-        focusUSBInput();
-    }
-
-    // --- EXPORTAR INFORME DE ASISTENCIA A CSV ---
-    function exportAttendanceToCSV() {
-        if (catalog.length === 0) {
-            showToast('Exportación Vacía', 'No hay alumnos en el catálogo para exportar un reporte.', 'warning');
+    function updateAttendanceStats() {
+        const date = attDateInput.value;
+        if (!date || attendanceStudents.length === 0) {
+            attStatTotal.textContent = '0';
+            attStatPresent.textContent = '0';
+            attStatAbsent.textContent = '0';
+            attStatPercent.textContent = '0%';
             return;
         }
 
-        const todayStr = getTodayDateString();
-        const dayRecords = attendance[todayStr] || {};
-        const group = cfgGroup.value.trim().toUpperCase() || 'S_G';
-        const startTime = cfgStartTime.value;
-        const tolerance = cfgTolerance.value;
+        const dayRecords = attendanceHistory[date] || {};
+        let total = attendanceStudents.length;
+        let present = 0;
+        let absent = 0;
 
-        // Nombre de archivo sanitizado
-        const safeGroup = group.replace(/[^a-zA-Z0-9]/g, '_');
-        const filename = `Asistencia_CBTis111_${safeGroup}_${todayStr}.csv`;
-
-        // Cabecera informativa del archivo CSV (UTF-8)
-        let csvContent = `Reporte de Asistencia - CBTis 111\n`;
-        csvContent += `Grupo Escolar: ${group}\n`;
-        csvContent += `Fecha del Reporte: ${todayStr}\n`;
-        csvContent += `Hora Inicio Programada: ${startTime} (Tolerancia: ${tolerance} min)\n\n`;
-        csvContent += `No.,Matricula,Apellido Paterno,Apellido Materno,Nombre(s),Estatus,Hora Registro\n`;
-
-        catalog.forEach((student, index) => {
-            const record = dayRecords[student.id];
-            let statusLabel = 'FALTA';
-            let timeLabel = '';
-
-            if (record) {
-                if (record.status === 'present') statusLabel = 'ASISTENCIA';
-                else if (record.status === 'late') statusLabel = 'RETARDO';
-                timeLabel = record.time;
-            }
-
-            // Escapar y armar fila CSV
-            const id = escapeCSVField(student.id);
-            const paternal = escapeCSVField(student.paternal);
-            const maternal = escapeCSVField(student.maternal);
-            const name = escapeCSVField(student.name);
-            
-            csvContent += `${index + 1},${id},${paternal},${maternal},${name},${statusLabel},${timeLabel}\n`;
+        attendanceStudents.forEach(student => {
+            const status = dayRecords[student.id] || 'present';
+            if (status === 'present') present++;
+            else if (status === 'absent') absent++;
+            else if (status === 'late') present++; // Consider 'late' as present in stats if it exists in old records
         });
 
-        // Generar descarga con BOM de UTF-8 para Excel
-        const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        attStatTotal.textContent = total;
+        attStatPresent.textContent = present;
+        attStatAbsent.textContent = absent;
+
+        const percent = total > 0 ? Math.round((present / total) * 100) : 0;
+        attStatPercent.textContent = `${percent}%`;
+    }
+
+    function saveAttendanceToLocalStorage() {
+        localStorage.setItem('cbtis_attendance_students', JSON.stringify(attendanceStudents));
+        localStorage.setItem('cbtis_attendance_history', JSON.stringify(attendanceHistory));
+    }
+
+    function handleAttendanceSearch(e) {
+        attendanceFilter = e.target.value;
+        if (attendanceFilter.length > 0) {
+            attClearSearchBtn.style.display = 'flex';
+        } else {
+            attClearSearchBtn.style.display = 'none';
+        }
+        renderAttendance();
+    }
+
+    function handleAttendanceClearSearch() {
+        attSearchInput.value = '';
+        attendanceFilter = '';
+        attClearSearchBtn.style.display = 'none';
+        attSearchInput.focus();
+        renderAttendance();
+    }
+
+    function exportAttendanceHistory() {
+        if (attendanceStudents.length === 0) {
+            showToast('Exportación Fallida', 'No hay datos de alumnos para exportar.', 'warning');
+            return;
+        }
+
+        const backupData = {
+            students: attendanceStudents,
+            history: attendanceHistory
+        };
+
+        const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
+        const link = document.createElement('a');
         
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0];
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `respaldo_asistencia_${dateStr}.json`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
 
-        showToast('Reporte Descargado', 'El archivo CSV de asistencia ha sido descargado correctamente.', 'success');
-        focusUSBInput();
+        showToast('Exportación Exitosa', 'El historial del semestre ha sido descargado en formato JSON.', 'success');
     }
 
-    // --- AYUDANTES / UTILITIES ---
-    
-    function getTodayDateString() {
-        const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
+    function handleImportHistory(e) {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    function capitalizeText(str) {
-        if (!str) return '';
-        return str
-            .trim()
-            .split(/\s+/)
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-            .join(' ');
-    }
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            try {
+                const data = JSON.parse(evt.target.result);
+                if (!data.students || !data.history) {
+                    showToast('Importación Fallida', 'El archivo no tiene el formato de respaldo correcto.', 'danger');
+                    return;
+                }
 
-    function sortCatalog() {
-        catalog.sort((a, b) => {
-            let cmp = a.paternal.localeCompare(b.paternal, 'es', { sensitivity: 'base' });
-            if (cmp !== 0) return cmp;
-            cmp = a.maternal.localeCompare(b.maternal, 'es', { sensitivity: 'base' });
-            if (cmp !== 0) return cmp;
-            return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
-        });
-    }
+                attendanceStudents = data.students;
+                attendanceHistory = data.history;
 
-    function escapeCSVField(val) {
-        let strVal = val ? val.toString() : '';
-        if (strVal.includes('"')) {
-            strVal = strVal.replace(/"/g, '""');
-        }
-        if (strVal.includes(',') || strVal.includes('"') || strVal.includes('\n') || strVal.includes(';')) {
-            strVal = `"${strVal}"`;
-        }
-        return strVal;
-    }
+                saveAttendanceToLocalStorage();
+                renderAttendance();
 
-    function saveCatalogToLocalStorage() {
-        localStorage.setItem('cbtis_qr_catalog', JSON.stringify(catalog));
-    }
-
-    function saveAttendanceToLocalStorage() {
-        localStorage.setItem('cbtis_qr_attendance', JSON.stringify(attendance));
-    }
-
-    // --- SISTEMA DE TOASTS CUSTOM ---
-    function showToast(title, message, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-
-        // Iconos según estatus
-        let iconClass = 'fa-solid fa-circle-info';
-        if (type === 'success') iconClass = 'fa-solid fa-circle-check';
-        if (type === 'warning') iconClass = 'fa-solid fa-circle-exclamation';
-        if (type === 'danger') iconClass = 'fa-solid fa-triangle-exclamation';
-
-        toast.innerHTML = `
-            <i class="${iconClass} toast-icon"></i>
-            <div class="toast-content">
-                <h4 class="toast-title">${title}</h4>
-                <p class="toast-message">${message}</p>
-            </div>
-            <button class="toast-close" aria-label="Cerrar notificación">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        `;
-
-        toast.querySelector('.toast-close').addEventListener('click', () => {
-            dismissToast(toast);
-        });
-
-        toastContainer.appendChild(toast);
-
-        // Auto descarte en 4 segundos
-        setTimeout(() => {
-            dismissToast(toast);
-        }, 4000);
-    }
-
-    function dismissToast(toast) {
-        if (!toast.parentNode) return;
-        toast.style.animation = 'toastOut 0.25s ease-out forwards';
-        setTimeout(() => {
-            if (toast.parentNode) {
-                toastContainer.removeChild(toast);
+                showToast('Respaldo Restaurado', `Se importaron ${attendanceStudents.length} alumnos e historial con éxito.`, 'success');
+            } catch (err) {
+                showToast('Error', 'No se pudo procesar el archivo JSON de respaldo.', 'danger');
             }
-        }, 250);
+            importHistoryFile.value = '';
+        };
+        reader.readAsText(file);
     }
 
-    // --- EJECUTAR SISTEMA ---
+    // --- EJECUTAR INICIO DE APP ---
     init();
 });
