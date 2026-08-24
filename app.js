@@ -614,7 +614,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 'success'
             );
 
-            showQRCodeModal(newStudent);
+            // Modal QR desactivado según solicitud del usuario
+            // showQRCodeModal(newStudent);
         } catch (err) {
             console.error("Error al guardar alumno en IndexedDB:", err);
             showToast('Error al Guardar', 'No se pudo guardar el registro en la base de datos del grupo.', 'danger');
@@ -970,7 +971,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- MODAL DE CÓDIGO QR ---
     function showQRCodeModal(student) {
-        if (!student || !qrModal || !qrCodeContainer) return;
+        // Modal QR oculto según requerimiento
+        return;
         currentQRStudent = student;
 
         qrStudentName.textContent = `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`;
