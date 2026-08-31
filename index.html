@@ -118,14 +118,20 @@
                     </div>
 
                     <!-- Action Buttons -->
-                    <div class="form-actions" style="display: flex; gap: 0.8rem; margin-top: 0.5rem;">
-                        <button type="submit" class="btn btn-primary" id="btn-submit" style="flex: 2;">
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-submit-student" id="btn-submit">
                             <i class="fa-solid fa-circle-check button-icon"></i> Registrar Alumno
                         </button>
-                        <button type="button" class="btn btn-secondary" id="btn-clear-table" style="flex: 1;"
-                            title="Limpiar todos los registros en pantalla para iniciar un nuevo grupo">
-                            <i class="fa-solid fa-broom"></i> Limpiar
-                        </button>
+                        <div class="form-secondary-actions">
+                            <button type="button" class="btn btn-secondary" id="btn-clear-table"
+                                title="Limpiar formulario y vista para comenzar un nuevo grupo desde cero">
+                                <i class="fa-solid fa-folder-plus button-icon"></i> Nuevo Grupo
+                            </button>
+                            <button type="button" class="btn btn-outline-danger" id="btn-empty-group"
+                                title="Vaciar todos los alumnos del grupo actual para empezar este grupo desde cero">
+                                <i class="fa-solid fa-broom button-icon"></i> Vaciar Grupo
+                            </button>
+                        </div>
                     </div>
                 </form>
             </section>
@@ -339,26 +345,56 @@
         </div>
     </div>
 
-    <!-- Custom Confirm Clear Modal -->
+    <!-- Custom Confirm Clear / New Group Modal -->
     <div class="modal-overlay" id="confirm-clear-modal" role="dialog" aria-modal="true" aria-hidden="true">
-        <div class="modal-card modal-card-danger">
+        <div class="modal-card">
             <button class="modal-close" id="clear-modal-close-btn" aria-label="Cerrar modal">
                 <i class="fa-solid fa-xmark"></i>
             </button>
             <div class="modal-header">
-                <i class="fa-solid fa-broom modal-header-icon text-danger"></i>
-                <h3>¿Limpiar Vista Actual?</h3>
+                <i class="fa-solid fa-folder-plus modal-header-icon text-accent"></i>
+                <h3>¿Comenzar Nuevo Grupo?</h3>
             </div>
             <div class="modal-body">
-                <p>¿Estás seguro de que deseas desvincular el grupo en pantalla para capturar o seleccionar un nuevo
-                    grupo?</p>
-                <p style="margin-top: 10px; font-weight: 600; color: var(--text-primary);">Los datos guardados en la
-                    base de datos de cada grupo no se perderán y podrás volver a cargarlos en cualquier momento desde el
-                    selector.</p>
+                <p>¿Deseas desvincular la vista y limpiar el formulario para comenzar a capturar un <strong>nuevo grupo desde cero</strong>?</p>
+                <div class="modal-info-box" style="margin-top: 12px; padding: 0.85rem; border-radius: var(--radius-sm); background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25);">
+                    <p style="margin: 0; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
+                        <i class="fa-solid fa-shield-halved text-accent"></i> <strong>Tranquilidad:</strong> Los alumnos registrados en los grupos existentes no se perderán; se mantienen seguros en sus respectivas bases de datos y podrás consultarlos en cualquier momento desde el selector.
+                    </p>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="clear-modal-cancel-btn">Cancelar</button>
-                <button class="btn btn-danger" id="clear-modal-confirm-btn">Sí, Limpiar</button>
+                <button class="btn btn-primary" id="clear-modal-confirm-btn">
+                    <i class="fa-solid fa-plus"></i> Iniciar Nuevo Grupo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirm Empty Group Modal -->
+    <div class="modal-overlay" id="confirm-empty-group-modal" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="modal-card modal-card-danger">
+            <button class="modal-close" id="empty-modal-close-btn" aria-label="Cerrar modal">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="modal-header">
+                <i class="fa-solid fa-triangle-exclamation modal-header-icon text-danger"></i>
+                <h3>¿Vaciar Contenido del Grupo?</h3>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de que deseas eliminar a <strong>todos los alumnos</strong> registrados en el grupo <strong id="empty-group-name" class="text-danger"></strong>?</p>
+                <div class="modal-alert-box" style="margin-top: 12px; padding: 0.85rem; border-radius: var(--radius-sm); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25);">
+                    <p style="font-size: 0.88rem; color: #fca5a5; margin: 0; line-height: 1.5;">
+                        <i class="fa-solid fa-trash-can"></i> <strong>Atención:</strong> Esta acción borrará permanentemente los datos de los alumnos en la base de datos de este grupo para que puedas comenzar a capturarlo nuevamente desde 0.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="empty-modal-cancel-btn">Cancelar</button>
+                <button class="btn btn-danger" id="empty-modal-confirm-btn">
+                    <i class="fa-solid fa-trash-can"></i> Sí, Vaciar Grupo
+                </button>
             </div>
         </div>
     </div>

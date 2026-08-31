@@ -149,6 +149,29 @@ const GroupDBManager = {
         });
     },
 
+    // Vaciar todos los alumnos de un grupo en su base de datos física sin eliminar el grupo del catálogo
+    clearGroupStudents(groupName) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const db = await this.openGroupDB(groupName);
+                const tx = db.transaction(this.STORE_NAME, 'readwrite');
+                const store = tx.objectStore(this.STORE_NAME);
+                const request = store.clear();
+
+                request.onsuccess = () => {
+                    db.close();
+                    resolve(true);
+                };
+                request.onerror = (e) => {
+                    db.close();
+                    reject(e.target.error);
+                };
+            } catch (err) {
+                reject(err);
+            }
+        });
+    },
+
     // Eliminar completamente la base de datos física de un grupo
     deleteGroupDB(groupName) {
         return new Promise((resolve, reject) => {
@@ -235,12 +258,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteModalCancelBtn = document.getElementById('delete-modal-cancel-btn');
     const deleteModalConfirmBtn = document.getElementById('delete-modal-confirm-btn');
 
-    // Botón Limpiar y su Modal
+    // Botón Nuevo Grupo y su Modal
     const btnClearTable = document.getElementById('btn-clear-table');
     const confirmClearModal = document.getElementById('confirm-clear-modal');
     const clearModalCloseBtn = document.getElementById('clear-modal-close-btn');
     const clearModalCancelBtn = document.getElementById('clear-modal-cancel-btn');
     const clearModalConfirmBtn = document.getElementById('clear-modal-confirm-btn');
+
+    // Botón Vaciar Grupo y su Modal
+    const btnEmptyGroup = document.getElementById('btn-empty-group');
+    const confirmEmptyGroupModal = document.getElementById('confirm-empty-group-modal');
+    const emptyGroupNameSpan = document.getElementById('empty-group-name');
+    const emptyModalCloseBtn = document.getElementById('empty-modal-close-btn');
+    const emptyModalCancelBtn = document.getElementById('empty-modal-cancel-btn');
+    const emptyModalConfirmBtn = document.getElementById('empty-modal-confirm-btn');
 
     // Modal de Código QR
     let currentQRStudent = null;
@@ -394,11 +425,17 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteModalCancelBtn.addEventListener('click', closeDeleteModal);
         deleteModalConfirmBtn.addEventListener('click', confirmDelete);
 
-        // Control del Modal de Limpieza
-        btnClearTable.addEventListener('click', openClearModal);
-        clearModalCloseBtn.addEventListener('click', closeClearModal);
-        clearModalCancelBtn.addEventListener('click', closeClearModal);
-        clearModalConfirmBtn.addEventListener('click', confirmClearTable);
+        // Control del Modal de Limpieza (Nuevo Grupo)
+        if (btnClearTable) btnClearTable.addEventListener('click', openClearModal);
+        if (clearModalCloseBtn) clearModalCloseBtn.addEventListener('click', closeClearModal);
+        if (clearModalCancelBtn) clearModalCancelBtn.addEventListener('click', closeClearModal);
+        if (clearModalConfirmBtn) clearModalConfirmBtn.addEventListener('click', confirmClearTable);
+
+        // Control del Modal de Vaciar Grupo (Reiniciar Grupo desde 0)
+        if (btnEmptyGroup) btnEmptyGroup.addEventListener('click', openEmptyGroupModal);
+        if (emptyModalCloseBtn) emptyModalCloseBtn.addEventListener('click', closeEmptyGroupModal);
+        if (emptyModalCancelBtn) emptyModalCancelBtn.addEventListener('click', closeEmptyGroupModal);
+        if (emptyModalConfirmBtn) emptyModalConfirmBtn.addEventListener('click', confirmEmptyGroup);
 
         // Control del Modal de QR
         if (qrModalCloseBtn) qrModalCloseBtn.addEventListener('click', closeQRCodeModal);
@@ -415,6 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === editModal) closeEditModal();
             if (e.target === deleteModal) closeDeleteModal();
             if (e.target === confirmClearModal) closeClearModal();
+            if (e.target === confirmEmptyGroupModal) closeEmptyGroupModal();
             if (e.target === qrModal) closeQRCodeModal();
         });
 
@@ -930,10 +968,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- MODAL DE LIMPIEZA DE VISTA ---
+    // --- MODAL DE LIMPIEZA / INICIAR NUEVO GRUPO DESDE 0 ---
     function openClearModal() {
-        if (students.length === 0 && !groupInput.value) {
-            showToast('Vista ya Limpia', 'No hay grupo cargado en pantalla.', 'info');
+        if (students.length === 0 && !groupInput.value.trim()) {
+            showToast('Vista ya Limpia', 'El formulario y la tabla ya están vacíos para capturar un grupo nuevo.', 'info');
+            groupInput.focus();
             return;
         }
         confirmClearModal.classList.add('active');
@@ -941,8 +980,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function closeClearModal() {
-        confirmClearModal.classList.remove('active');
-        confirmClearModal.setAttribute('aria-hidden', 'true');
+        if (confirmClearModal) {
+            confirmClearModal.classList.remove('active');
+            confirmClearModal.setAttribute('aria-hidden', 'true');
+        }
     }
 
     function confirmClearTable() {
@@ -965,7 +1006,67 @@ document.addEventListener('DOMContentLoaded', () => {
         registrationForm.reset();
         clearFormValidationStyles();
         render();
-        showToast('Vista Limpiada', 'Puedes ingresar un nuevo grupo o seleccionar uno existente.', 'info');
+        groupInput.focus();
+        showToast('Nuevo Grupo', 'Pantalla y formulario listos para registrar un nuevo grupo desde cero.', 'info');
+    }
+
+    // --- MODAL DE VACIAR GRUPO (REINICIAR GRUPO DESDE 0 EN BD) ---
+    function openEmptyGroupModal() {
+        const currentGroup = groupInput.value.trim().toUpperCase();
+        if (!currentGroup) {
+            showToast('Sin Grupo', 'Por favor selecciona o especifica un grupo primero.', 'warning');
+            groupInput.focus();
+            return;
+        }
+        if (students.length === 0) {
+            showToast('Grupo Vacío', `El grupo ${currentGroup} no tiene ningún alumno registrado actualmente.`, 'info');
+            return;
+        }
+
+        if (emptyGroupNameSpan) {
+            emptyGroupNameSpan.textContent = currentGroup;
+        }
+        confirmEmptyGroupModal.classList.add('active');
+        confirmEmptyGroupModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeEmptyGroupModal() {
+        if (confirmEmptyGroupModal) {
+            confirmEmptyGroupModal.classList.remove('active');
+            confirmEmptyGroupModal.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    function confirmEmptyGroup() {
+        closeEmptyGroupModal();
+        const rows = document.querySelectorAll('#students-table-body tr');
+        if (rows.length > 0) {
+            rows.forEach(row => row.classList.add('row-delete'));
+            setTimeout(() => executeEmptyGroup(), 300);
+        } else {
+            executeEmptyGroup();
+        }
+    }
+
+    async function executeEmptyGroup() {
+        const currentGroup = groupInput.value.trim().toUpperCase();
+        if (!currentGroup) return;
+
+        try {
+            await GroupDBManager.clearGroupStudents(currentGroup);
+            students = [];
+            render();
+            clearFormValidationStyles();
+
+            showToast(
+                'Grupo Vaciado', 
+                `Se eliminaron todos los alumnos del grupo ${currentGroup}. Puedes comenzar a registrarlo nuevamente desde 0.`, 
+                'success'
+            );
+        } catch (err) {
+            console.error(`Error al vaciar grupo ${currentGroup}:`, err);
+            showToast('Error al Vaciar', `No se pudo vaciar la base de datos del grupo ${currentGroup}.`, 'danger');
+        }
     }
 
 
