@@ -22,11 +22,6 @@
 </head>
 
 <body>
-    <!-- Background Glow Blobs -->
-    <div class="bg-glow bg-glow-1"></div>
-    <div class="bg-glow bg-glow-2"></div>
-    <div class="bg-glow bg-glow-3"></div>
-
     <div class="app-container">
         <!-- Header -->
         <header class="app-header">
@@ -213,7 +208,7 @@
                 </div>
                 
                 <div class="scanner-container" style="display: flex; flex-direction: column; gap: 1rem;">
-                    <div id="qr-reader" style="width: 100%; border-radius: var(--radius-md); overflow: hidden; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass);"></div>
+                    <div id="qr-reader" style="width: 100%; border-radius: var(--radius-sm); overflow: hidden;"></div>
                     
                     <div class="scanner-actions" style="display: flex; flex-direction: column; gap: 0.8rem;">
                         <button type="button" class="btn btn-primary" id="btn-start-camera" style="width: 100%;">
@@ -244,15 +239,15 @@
 
                 <!-- Empty state when no QR scanned -->
                 <div id="qr-scan-empty-state" class="empty-state" style="display: flex; padding: 3rem 1.5rem; text-align: center; flex-direction: column; align-items: center; justify-content: center;">
-                    <div class="empty-illustration" style="font-size: 3.5rem; color: var(--accent-red); margin-bottom: 1rem;">
-                        <i class="fa-solid fa-qrcode animate-pulse"></i>
+                    <div class="empty-illustration" style="font-size: 3rem; color: var(--accent-red); margin-bottom: 1rem;">
+                        <i class="fa-solid fa-qrcode"></i>
                     </div>
-                    <h3 style="font-size: 1.3rem; margin-bottom: 0.5rem; color: var(--text-primary);">Escáner Listo</h3>
-                    <p style="color: var(--text-muted); max-width: 400px; font-size: 0.9rem; line-height: 1.5;">Activa la cámara o sube una imagen con un código QR para leer y desplegar automáticamente la información del alumno.</p>
+                    <h3 style="font-size: 1.2rem; margin-bottom: 0.5rem; color: var(--text-primary);">Escáner Listo</h3>
+                    <p style="color: var(--text-secondary); max-width: 400px; font-size: 0.9rem; line-height: 1.5;">Activa la cámara o sube una imagen con un código QR para leer y desplegar automáticamente la información del alumno.</p>
                 </div>
 
                 <!-- Result Card when QR is scanned -->
-                <div id="qr-scan-result-card" class="qr-result-card" style="display: none; padding: 1.5rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass); border-radius: var(--radius-lg);">
+                <div id="qr-scan-result-card" class="qr-result-card" style="display: none; padding: 1.5rem;">
                     <div class="result-badge-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; flex-wrap: wrap; gap: 0.5rem;">
                         <span id="qr-result-badge" class="result-badge" style="padding: 0.4rem 0.9rem; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600;">
                             <i class="fa-solid fa-circle-check"></i> Código QR Válido
@@ -262,33 +257,33 @@
                         </span>
                     </div>
 
-                    <div class="result-details-grid" style="display: flex; flex-direction: column; gap: 1.2rem;">
-                        <div class="detail-item" style="background: rgba(0, 0, 0, 0.25); padding: 1rem; border-radius: var(--radius-md); border-left: 3px solid var(--accent-red);">
-                            <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Alumno</span>
-                            <strong id="qr-res-name" style="font-size: 1.25rem; color: var(--text-primary); font-family: var(--font-heading);">--</strong>
+                    <div class="result-details-grid" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="detail-item" style="padding: 1rem; border-left: 3px solid var(--accent-red);">
+                            <span class="detail-label" style="display: block; margin-bottom: 0.3rem;">Alumno</span>
+                            <strong id="qr-res-name" style="font-size: 1.2rem; color: var(--text-primary); font-family: var(--font-heading);">--</strong>
                         </div>
 
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                            <div class="detail-item" style="background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: var(--radius-md);">
-                                <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Grupo Escolar</span>
-                                <span id="qr-res-group" style="font-size: 1rem; color: var(--text-primary); font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+                            <div class="detail-item" style="padding: 0.8rem;">
+                                <span class="detail-label" style="display: block; margin-bottom: 0.3rem;">Grupo Escolar</span>
+                                <span id="qr-res-group" style="font-size: 0.95rem; color: var(--text-primary); font-weight: 600; display: inline-flex; align-items: center; gap: 0.4rem;">
                                     <i class="fa-solid fa-users-rectangle text-accent"></i> --
                                 </span>
                             </div>
-                            <div class="detail-item" style="background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: var(--radius-md);">
-                                <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">ID de Registro</span>
-                                <span id="qr-res-id" style="font-size: 0.85rem; color: var(--text-primary); font-family: monospace; background: rgba(255,255,255,0.05); padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block;">--</span>
+                            <div class="detail-item" style="padding: 0.8rem;">
+                                <span class="detail-label" style="display: block; margin-bottom: 0.3rem;">ID de Registro</span>
+                                <span id="qr-res-id" style="font-size: 0.85rem; color: var(--text-secondary); font-family: monospace; background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block;">--</span>
                             </div>
                         </div>
 
-                        <div class="detail-item" style="background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: var(--radius-md);">
-                            <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.3rem;">Correo Electrónico</span>
-                            <span id="qr-res-email" style="font-size: 0.95rem; color: var(--text-primary); word-break: break-all;">--</span>
+                        <div class="detail-item" style="padding: 0.8rem;">
+                            <span class="detail-label" style="display: block; margin-bottom: 0.3rem;">Correo Electrónico</span>
+                            <span id="qr-res-email" style="font-size: 0.92rem; color: var(--text-primary); word-break: break-all;">--</span>
                         </div>
 
-                        <div class="detail-item" id="qr-res-raw-wrapper" style="margin-top: 0.3rem; padding-top: 0.8rem; border-top: 1px dashed var(--border-glass);">
-                            <span class="detail-label" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.3rem;">Contenido QR Decodificado</span>
-                            <pre id="qr-res-raw" style="font-size: 0.8rem; color: var(--text-muted); background: rgba(0,0,0,0.3); padding: 0.8rem; border-radius: 6px; white-space: pre-wrap; word-break: break-all; margin: 0; font-family: monospace; border: 1px solid var(--border-glass);"></pre>
+                        <div class="detail-item" id="qr-res-raw-wrapper" style="margin-top: 0.25rem; padding: 0.85rem; border-top: 1px dashed var(--border-subtle);">
+                            <span class="detail-label" style="display: block; margin-bottom: 0.3rem;">Contenido QR Decodificado</span>
+                            <pre id="qr-res-raw" style="font-size: 0.8rem; color: var(--text-secondary); background: var(--bg-surface); padding: 0.8rem; border-radius: 6px; white-space: pre-wrap; word-break: break-all; margin: 0; font-family: monospace; border: 1px solid var(--border-subtle);"></pre>
                         </div>
                     </div>
                 </div>
@@ -357,8 +352,8 @@
             </div>
             <div class="modal-body">
                 <p>¿Deseas desvincular la vista y limpiar el formulario para comenzar a capturar un <strong>nuevo grupo desde cero</strong>?</p>
-                <div class="modal-info-box" style="margin-top: 12px; padding: 0.85rem; border-radius: var(--radius-sm); background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25);">
-                    <p style="margin: 0; font-size: 0.88rem; color: var(--text-secondary); line-height: 1.5;">
+                <div class="modal-info-box">
+                    <p style="margin: 0; font-size: 0.88rem; color: var(--info); line-height: 1.5;">
                         <i class="fa-solid fa-shield-halved text-accent"></i> <strong>Tranquilidad:</strong> Los alumnos registrados en los grupos existentes no se perderán; se mantienen seguros en sus respectivas bases de datos y podrás consultarlos en cualquier momento desde el selector.
                     </p>
                 </div>
@@ -384,8 +379,8 @@
             </div>
             <div class="modal-body">
                 <p>¿Estás seguro de que deseas eliminar a <strong>todos los alumnos</strong> registrados en el grupo <strong id="empty-group-name" class="text-danger"></strong>?</p>
-                <div class="modal-alert-box" style="margin-top: 12px; padding: 0.85rem; border-radius: var(--radius-sm); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25);">
-                    <p style="font-size: 0.88rem; color: #fca5a5; margin: 0; line-height: 1.5;">
+                <div class="modal-alert-box">
+                    <p style="font-size: 0.88rem; color: var(--danger-hover); margin: 0; line-height: 1.5;">
                         <i class="fa-solid fa-trash-can"></i> <strong>Atención:</strong> Esta acción borrará permanentemente los datos de los alumnos en la base de datos de este grupo para que puedas comenzar a capturarlo nuevamente desde 0.
                     </p>
                 </div>
