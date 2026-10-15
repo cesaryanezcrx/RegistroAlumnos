@@ -14,19 +14,22 @@
     /* Bordes */
     --border-subtle: #e2e8f0;
     --border-medium: #cbd5e1;
-    --border-focus: #b91c1c;
+    --border-focus: #2563eb;
 
     /* Tipografía */
     --text-primary: #0f172a;
     --text-secondary: #475569;
     --text-muted: #94a3b8;
 
-    /* Color Institucional CBTis (Rojo Carmesí / Guinda) */
-    --accent-red: #b91c1c;
-    --accent-hover: #991b1b;
-    --accent-subtle: #fef2f2;
-    --accent-border: #fecaca;
-    --accent-ring: rgba(185, 28, 28, 0.12);
+    /* Color de Acento (Azul Moderno / Profesional) */
+    --accent-blue: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-subtle: #eff6ff;
+    --accent-border: #bfdbfe;
+    --accent-ring: rgba(37, 99, 235, 0.15);
+
+    /* Alias para compatibilidad de acento */
+    --accent-red: var(--accent-blue);
 
     /* Estados Semánticos Claros */
     --success: #059669;
@@ -102,7 +105,7 @@ body::before {
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, var(--accent-red), #dc2626, var(--accent-red));
+    background: linear-gradient(90deg, #2563eb, #3b82f6, #1d4ed8);
     z-index: 1000;
 }
 
@@ -494,7 +497,7 @@ body::before {
 }
 
 .btn-primary {
-    background: var(--accent-red);
+    background: var(--accent-blue);
     color: #ffffff;
     border-color: var(--accent-hover);
     box-shadow: var(--shadow-xs);
@@ -502,8 +505,8 @@ body::before {
 
 .btn-primary:hover {
     background: var(--accent-hover);
-    border-color: #7f1d1d;
-    box-shadow: 0 4px 10px rgba(185, 28, 28, 0.2);
+    border-color: #1e40af;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
     transform: translateY(-1px);
 }
 
@@ -522,15 +525,15 @@ body::before {
 
 .btn-outline-danger {
     background: var(--bg-surface);
-    border: 1px solid var(--danger-border);
-    color: var(--danger);
+    border: 1px solid var(--accent-border);
+    color: var(--accent-blue);
     box-shadow: var(--shadow-xs);
 }
 
 .btn-outline-danger:hover {
-    background: var(--danger-bg);
-    border-color: var(--danger);
-    color: var(--danger-hover);
+    background: var(--accent-subtle);
+    border-color: var(--accent-blue);
+    color: var(--accent-hover);
 }
 
 .btn-success {
@@ -555,15 +558,15 @@ body::before {
 }
 
 .btn-danger {
-    background: var(--danger);
+    background: var(--accent-blue);
     color: #ffffff;
-    border-color: var(--danger-hover);
+    border-color: var(--accent-hover);
     box-shadow: var(--shadow-xs);
 }
 
 .btn-danger:hover {
-    background: var(--danger-hover);
-    border-color: #991b1b;
+    background: var(--accent-hover);
+    border-color: #1e40af;
 }
 
 .form-secondary-actions {
@@ -858,9 +861,9 @@ body::before {
 }
 
 .btn-delete-row:hover {
-    background: var(--danger-bg);
-    border-color: var(--danger-border);
-    color: var(--danger);
+    background: var(--accent-subtle);
+    border-color: var(--accent-border);
+    color: var(--accent-blue);
 }
 
 /* --- Estados Vacíos (Empty States) --- */
@@ -991,7 +994,7 @@ body::before {
 }
 
 .modal-card-danger {
-    border-top: 4px solid var(--danger);
+    border-top: 4px solid var(--accent-blue);
 }
 
 .modal-close {
@@ -1025,11 +1028,11 @@ body::before {
 
 .modal-header-icon {
     font-size: 1.35rem;
-    color: var(--accent-red);
+    color: var(--accent-blue);
 }
 
 .modal-header-icon.text-danger {
-    color: var(--danger);
+    color: var(--accent-blue);
 }
 
 .modal-header h3 {
@@ -1063,8 +1066,8 @@ body::before {
     margin-top: 12px;
     padding: 0.85rem;
     border-radius: var(--radius-sm);
-    background: var(--danger-bg);
-    border: 1px solid var(--danger-border);
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent-border);
 }
 
 .modal-footer {
@@ -1075,11 +1078,11 @@ body::before {
 
 /* Custom Text Utils */
 .text-danger {
-    color: var(--danger) !important;
+    color: var(--accent-blue) !important;
 }
 
 .text-accent {
-    color: var(--accent-red) !important;
+    color: var(--accent-blue) !important;
 }
 
 /* --- Modal y Contenedor de Código QR --- */
