@@ -1,6 +1,6 @@
 /**
  * ==========================================================================
- * LÓGICA DE NEGOCIO - REGISTRO DE ALUMNOS (CBTis)
+ * LÓGICA DE NEGOCIO - REGISTRO DE ALUMNOS
  * Almacenamiento: Base de Datos independiente por Grupo en IndexedDB.
  * Notificaciones Toast custom, modals premium y búsqueda interactiva.
  * Lector de Códigos QR (Html5Qrcode scanner & file decode).
@@ -208,7 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const paternalInput = document.getElementById('paternal-last-name');
     const maternalInput = document.getElementById('maternal-last-name');
     const firstNameInput = document.getElementById('first-name');
-    const emailInput = document.getElementById('email-input');
     const submitBtn = document.getElementById('btn-submit');
 
     // Tabla y Gestor de Base de Datos de Grupo
@@ -377,9 +376,11 @@ document.addEventListener('DOMContentLoaded', () => {
         registrationForm.addEventListener('submit', handleRegistrationSubmit);
 
         // Validación en tiempo real al escribir o perder el foco
-        [paternalInput, maternalInput, firstNameInput, emailInput].forEach(input => {
-            input.addEventListener('input', () => validateField(input));
-            input.addEventListener('blur', () => validateField(input));
+        [paternalInput, maternalInput, firstNameInput].forEach(input => {
+            if (input) {
+                input.addEventListener('input', () => validateField(input));
+                input.addEventListener('blur', () => validateField(input));
+            }
         });
 
         groupInput.addEventListener('input', () => {
@@ -478,7 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const safeGroup = rawGroup.replace(/[\/\\?%*:|"<>.]/g, '').replace(/\s+/g, '_');
 
-        let csvContent = `Grupo Escolar: ${rawGroup}\nNº,ID Alumno,Apellido Paterno,Apellido Materno,Nombre(s),Correo Electrónico\n`;
+        let csvContent = `Grupo Escolar: ${rawGroup}\nNº,ID Alumno,Apellido Paterno,Apellido Materno,Nombre(s)\n`;
 
         students.forEach((student, index) => {
             const num = index + 1;
@@ -486,9 +487,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const paternal = escapeCSVField(student.paternalLastName);
             const maternal = escapeCSVField(student.maternalLastName);
             const name = escapeCSVField(student.firstName);
-            const email = escapeCSVField(student.email || '');
 
-            csvContent += `${num},${studentId},${paternal},${maternal},${name},${email}\n`;
+            csvContent += `${num},${studentId},${paternal},${maternal},${name}\n`;
         });
 
         // Marca de orden de bytes UTF-8 (BOM) para compatibilidad con Excel
@@ -573,13 +573,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const isPaternalValid = validateField(paternalInput);
         const isMaternalValid = validateField(maternalInput);
         const isNameValid = validateField(firstNameInput);
-        const isEmailValid = validateField(emailInput);
 
-        return isGroupValid && isPaternalValid && isMaternalValid && isNameValid && isEmailValid;
+        return isGroupValid && isPaternalValid && isMaternalValid && isNameValid;
     }
 
     function clearFormValidationStyles() {
-        [paternalInput, maternalInput, firstNameInput, emailInput].forEach(input => {
+        [paternalInput, maternalInput, firstNameInput].forEach(input => {
             if (input && input.parentElement) {
                 input.parentElement.classList.remove('success', 'error');
             }
@@ -602,7 +601,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const paternal = capitalizeText(paternalInput.value);
         const maternal = capitalizeText(maternalInput.value);
         const firstName = capitalizeText(firstNameInput.value);
-        const email = emailInput.value.trim().toLowerCase();
 
         // Verificar duplicados en el grupo activo
         const isDuplicate = students.some(student => 
@@ -627,8 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
             group: group,
             paternalLastName: paternal,
             maternalLastName: maternal,
-            firstName: firstName,
-            email: email
+            firstName: firstName
         };
 
         try {
@@ -639,12 +636,12 @@ document.addEventListener('DOMContentLoaded', () => {
             refreshGroupSelects();
             render(newStudent.id);
 
-            // Limpiar datos del alumno
+            // Limpiar datos del alumno y devolver el foco para captura ágil
             paternalInput.value = '';
             maternalInput.value = '';
             firstNameInput.value = '';
-            emailInput.value = '';
             clearFormValidationStyles();
+            paternalInput.focus();
 
             showToast(
                 'Guardado en Base de Datos', 
@@ -706,7 +703,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${escapeHTML(student.paternalLastName)}</td>
                 <td>${escapeHTML(student.maternalLastName)}</td>
                 <td>${escapeHTML(student.firstName)}</td>
-                <td>${escapeHTML(student.email || '-')}</td>
                 <td class="col-actions">
                     <div class="action-buttons">
                         <button 
@@ -812,22 +808,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <input type="text" id="edit-first-name" value="${escapeHTML(student.firstName)}" required>
                     <span class="error-message">Este campo es requerido.</span>
                 </div>
-                <div class="input-group">
-                    <label for="edit-email">
-                        <i class="fa-solid fa-envelope input-icon"></i> Correo Electrónico
-                    </label>
-                    <input type="email" id="edit-email" value="${escapeHTML(student.email || '')}" required>
-                    <span class="error-message">Este campo es requerido.</span>
-                </div>
             </div>
         `;
 
         const editPaternal = document.getElementById('edit-paternal');
         const editMaternal = document.getElementById('edit-maternal');
         const editFirstName = document.getElementById('edit-first-name');
-        const editEmail = document.getElementById('edit-email');
 
-        [editPaternal, editMaternal, editFirstName, editEmail].forEach(input => {
+        [editPaternal, editMaternal, editFirstName].forEach(input => {
             if (input) input.addEventListener('input', () => validateField(input));
         });
 
@@ -848,14 +836,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const editPaternal = document.getElementById('edit-paternal');
         const editMaternal = document.getElementById('edit-maternal');
         const editFirstName = document.getElementById('edit-first-name');
-        const editEmail = document.getElementById('edit-email');
 
         const isPaternalValid = validateField(editPaternal);
         const isMaternalValid = validateField(editMaternal);
         const isNameValid = validateField(editFirstName);
-        const isEmailValid = validateField(editEmail);
 
-        if (!isPaternalValid || !isMaternalValid || !isNameValid || !isEmailValid) {
+        if (!isPaternalValid || !isMaternalValid || !isNameValid) {
             showToast('Formulario Incompleto', 'Por favor, llena todos los campos en la edición.', 'warning');
             return;
         }
@@ -865,7 +851,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const formattedPaternal = capitalizeText(editPaternal.value);
             const formattedMaternal = capitalizeText(editMaternal.value);
             const formattedName = capitalizeText(editFirstName.value);
-            const formattedEmail = editEmail.value.trim().toLowerCase();
             const currentGroup = groupInput.value.toUpperCase().trim();
 
             const isDuplicate = students.some(student => 
@@ -888,8 +873,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ...students[index],
                 paternalLastName: formattedPaternal,
                 maternalLastName: formattedMaternal,
-                firstName: formattedName,
-                email: formattedEmail
+                firstName: formattedName
             };
 
             try {
@@ -1078,15 +1062,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         qrStudentName.textContent = `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`;
         qrStudentGroup.innerHTML = `<i class="fa-solid fa-users-rectangle"></i> Grupo: ${escapeHTML(student.group)}`;
-        qrStudentEmail.innerHTML = `<i class="fa-solid fa-envelope"></i> Correo: ${escapeHTML(student.email || '-')}`;
+        if (qrStudentEmail) qrStudentEmail.style.display = 'none';
 
         qrCodeContainer.innerHTML = '';
 
         const qrData = JSON.stringify({
             id: student.id,
             nombre: `${student.firstName} ${student.paternalLastName} ${student.maternalLastName}`,
-            grupo: student.group,
-            email: student.email
+            grupo: student.group
         });
 
         if (typeof QRCode !== 'undefined') {
@@ -1363,20 +1346,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- NAVEGACIÓN DE PESTAÑAS ---
 
     function setupTabs() {
+        if (!tabButtons || tabButtons.length === 0) return;
         tabButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 tabButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 const targetTab = btn.getAttribute('data-tab');
 
-                viewRegistro.style.display = 'none';
+                if (viewRegistro) viewRegistro.style.display = 'none';
                 if (viewEscaneo) viewEscaneo.style.display = 'none';
 
-                if (targetTab === 'registro') {
-                    viewRegistro.style.display = 'grid';
+                if (targetTab === 'registro' && viewRegistro) {
+                    viewRegistro.style.display = 'flex';
                     stopCameraScanner();
-                } else if (targetTab === 'escaneo') {
-                    if (viewEscaneo) viewEscaneo.style.display = 'grid';
+                } else if (targetTab === 'escaneo' && viewEscaneo) {
+                    viewEscaneo.style.display = 'grid';
                 }
             });
         });

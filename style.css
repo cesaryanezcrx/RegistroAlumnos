@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CSS PRINCIPAL - REGISTRO DE ALUMNOS (CBTis 111)
+   CSS PRINCIPAL - REGISTRO DE ALUMNOS
    Diseño: Minimalista Moderno, Limpio y Claro (Light Minimalist Editorial)
    ========================================================================== */
 
@@ -263,19 +263,14 @@ body::before {
     box-shadow: var(--shadow-xs);
 }
 
-/* --- Workspace Grid --- */
+/* --- Workspace Layout --- */
 .app-workspace {
-    display: grid;
-    grid-template-columns: 380px 1fr;
-    gap: 1.75rem;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: stretch;
     flex-grow: 1;
-}
-
-@media (max-width: 1024px) {
-    .app-workspace {
-        grid-template-columns: 1fr;
-    }
+    width: 100%;
 }
 
 /* --- Tarjetas Minimalistas (Cards) --- */
@@ -315,17 +310,89 @@ body::before {
     color: var(--text-primary);
 }
 
-/* --- Formulario de Registro --- */
-#registration-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
+/* --- Formulario de Registro Horizontal --- */
+.workspace-form {
+    width: 100%;
 }
 
-.form-divider {
-    height: 1px;
-    background: var(--border-subtle);
-    margin: 0.25rem 0;
+.workspace-form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.workspace-form-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.workspace-form-title h2 {
+    font-family: var(--font-heading);
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+.form-horizontal {
+    width: 100%;
+}
+
+.form-fields-row {
+    display: grid;
+    grid-template-columns: minmax(130px, 160px) 1fr 1fr 1.2fr auto;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.form-submit-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-submit-group .btn-submit-student {
+    margin-top: 1.55rem;
+    height: 42px;
+    padding: 0 1.35rem;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+@media (max-width: 992px) {
+    .form-fields-row {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .form-submit-group {
+        grid-column: 1 / -1;
+    }
+    
+    .form-submit-group .btn-submit-student {
+        margin-top: 0.5rem;
+        width: 100%;
+    }
+}
+
+@media (max-width: 600px) {
+    .form-fields-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .workspace-form-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .form-secondary-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
 }
 
 .input-group {
@@ -499,30 +566,15 @@ body::before {
     border-color: #991b1b;
 }
 
-.form-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
-}
-
-.btn-submit-student {
-    width: 100%;
-    padding: 0.8rem 1.2rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-}
-
 .form-secondary-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    align-items: center;
     gap: 0.65rem;
 }
 
-@media (max-width: 480px) {
-    .form-secondary-actions {
-        grid-template-columns: 1fr;
-    }
+.btn-sm {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
 }
 
 /* --- Barra de Control / Búsqueda en la Tabla --- */
